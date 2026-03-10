@@ -1,0 +1,16 @@
+[package]
+name = "oxc_ex_nif"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "oxc_ex_nif"
+crate-type = ["cdylib"]
+
+[dependencies]
+rustler = "0.37"
+oxc_allocator = "0.117"
+oxc_ast = { version = "0.117", features = ["serialize"] }
+oxc_parser = "0.117"
+oxc_span = "0.117"
+serde_json = "1"

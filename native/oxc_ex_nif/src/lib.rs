@@ -34,7 +34,11 @@ fn json_to_term<'a>(env: Env<'a>, value: &Value) -> Term<'a> {
         Value::Object(map) => {
             let keys: Vec<Term<'a>> = map
                 .keys()
-                .map(|k| rustler::types::atom::Atom::from_str(env, k).unwrap().encode(env))
+                .map(|k| {
+                    rustler::types::atom::Atom::from_str(env, k)
+                        .unwrap()
+                        .encode(env)
+                })
                 .collect();
             let vals: Vec<Term<'a>> = map.values().map(|v| json_to_term(env, v)).collect();
             Term::map_from_arrays(env, &keys, &vals).unwrap()
@@ -59,12 +63,8 @@ fn parse<'a>(env: Env<'a>, source: &str, filename: &str) -> NifResult<Term<'a>> 
             .iter()
             .map(|e| {
                 let msg = e.to_string();
-                Term::map_from_arrays(
-                    env,
-                    &[atoms::message().encode(env)],
-                    &[msg.encode(env)],
-                )
-                .unwrap()
+                Term::map_from_arrays(env, &[atoms::message().encode(env)], &[msg.encode(env)])
+                    .unwrap()
             })
             .collect();
         return Ok((atoms::error(), errors).encode(env));

@@ -7,7 +7,9 @@ defmodule OxcEx.MixProject do
       version: "0.1.0",
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
-      deps: deps()
+      deps: deps(),
+      aliases: aliases(),
+      dialyzer: [plt_add_apps: [:mix]]
     ]
   end
 
@@ -17,10 +19,24 @@ defmodule OxcEx.MixProject do
     ]
   end
 
+  defp aliases do
+    [
+      lint: [
+        "format --check-formatted",
+        "credo --strict",
+        "dialyzer",
+        "cmd cargo fmt --manifest-path native/oxc_ex_nif/Cargo.toml -- --check",
+        "cmd cargo clippy --manifest-path native/oxc_ex_nif/Cargo.toml -- -D warnings"
+      ]
+    ]
+  end
+
   defp deps do
     [
       {:rustler, "~> 0.36.1"},
-      {:rustler_precompiled, "~> 0.8"}
+      {:rustler_precompiled, "~> 0.8"},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 end

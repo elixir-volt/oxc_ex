@@ -1,6 +1,8 @@
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 
 use oxc_allocator::Allocator;
+use oxc_ast::ast::{ImportOrExportKind, Statement};
 use oxc_codegen::{Codegen, CodegenOptions, CodegenReturn};
 use oxc_minifier::{CompressOptions, MangleOptions, Minifier, MinifierOptions};
 use oxc_parser::{ParseOptions, Parser};
@@ -172,6 +174,241 @@ fn minify<'a>(env: Env<'a>, source: &str, filename: &str, mangle: bool) -> NifRe
         .build(&program);
 
     Ok((atoms::ok(), code).encode(env))
+}
+
+/// Normalize a module specifier like `"./foo"` or `"./foo.ts"` to a key like `"foo"`.
+fn normalize_specifier(specifier: &str) -> String {
+    let s = specifier.strip_prefix("./").unwrap_or(specifier);
+    s.strip_suffix(".ts")
+        .or_else(|| s.strip_suffix(".tsx"))
+        .or_else(|| s.strip_suffix(".js"))
+        .or_else(|| s.strip_suffix(".jsx"))
+        .unwrap_or(s)
+        .to_string()
+}
+
+/// Transform a single TS/JS module, strip import/export syntax, return JS + list of import sources.
+fn transform_module(
+    allocator: &Allocator,
+    source: &str,
+    filename: &str,
+) -> Result<(String, Vec<String>), Vec<String>> {
+    let source_type = SourceType::from_path(filename).unwrap_or_default();
+    let path = Path::new(filename);
+
+    let ret = Parser::new(allocator, source, source_type)
+        .with_options(ParseOptions {
+            parse_regular_expression: true,
+            ..ParseOptions::default()
+        })
+        .parse();
+
+    if !ret.errors.is_empty() {
+        return Err(format_errors(&ret.errors));
+    }
+
+    let mut program = ret.program;
+
+    // Collect import sources before transform (which removes type-only imports).
+    // Skip `import type { ... }` — they don't create runtime dependencies.
+    let mut imports = Vec::new();
+    for stmt in program.body.iter() {
+        if let Statement::ImportDeclaration(decl) = stmt {
+            if decl.import_kind != ImportOrExportKind::Type {
+                imports.push(decl.source.value.to_string());
+            }
+        }
+    }
+
+    let scoping = SemanticBuilder::new()
+        .build(&program)
+        .semantic
+        .into_scoping();
+
+    let result =
+        Transformer::new(allocator, path, &TransformOptions::default())
+            .build_with_scoping(scoping, &mut program);
+
+    if !result.errors.is_empty() {
+        return Err(format_errors(&result.errors));
+    }
+
+    // Strip module syntax: remove imports, unwrap exports
+    let mut new_body = oxc_allocator::Vec::new_in(allocator);
+    for stmt in program.body.into_iter() {
+        match stmt {
+            // Drop all import declarations
+            Statement::ImportDeclaration(_) => {}
+            // Drop re-export-all: `export * from './foo'`
+            Statement::ExportAllDeclaration(_) => {}
+            // `export class Foo {}` / `export const x = ...` → keep the declaration
+            Statement::ExportNamedDeclaration(decl) => {
+                let inner = decl.unbox();
+                if let Some(declaration) = inner.declaration {
+                    new_body.push(Statement::from(declaration));
+                }
+                // `export { Foo }` without declaration — drop (already in scope)
+            }
+            // `export default expr` → keep as expression statement
+            Statement::ExportDefaultDeclaration(decl) => {
+                let inner = decl.unbox();
+                match inner.declaration {
+                    oxc_ast::ast::ExportDefaultDeclarationKind::FunctionDeclaration(f) => {
+                        new_body.push(Statement::FunctionDeclaration(f));
+                    }
+                    oxc_ast::ast::ExportDefaultDeclarationKind::ClassDeclaration(c) => {
+                        new_body.push(Statement::ClassDeclaration(c));
+                    }
+                    oxc_ast::ast::ExportDefaultDeclarationKind::TSInterfaceDeclaration(_) => {}
+                    _ => {
+                        // Expression default exports — wrap in expression statement
+                        // This is rare in our use case, skip for now
+                    }
+                }
+            }
+            // Keep everything else as-is
+            other => new_body.push(other),
+        }
+    }
+    program.body = new_body;
+
+    let CodegenReturn { code, .. } = Codegen::new().build(&program);
+    Ok((code, imports))
+}
+
+/// Topologically sort modules by their import dependencies (Kahn's algorithm).
+fn topo_sort(
+    modules: &HashMap<String, Vec<String>>,
+) -> Result<Vec<String>, String> {
+    let all_keys: HashSet<&String> = modules.keys().collect();
+
+    // Build adjacency: dep → dependents (for Kahn's)
+    let mut in_degree: HashMap<&String, usize> = HashMap::new();
+    let mut dependents: HashMap<&String, Vec<&String>> = HashMap::new();
+
+    for key in &all_keys {
+        in_degree.insert(key, 0);
+    }
+
+    for (key, deps) in modules {
+        for dep_raw in deps {
+            let dep_key = normalize_specifier(dep_raw);
+            if let Some(dep_ref) = all_keys.iter().find(|k| ***k == dep_key) {
+                *in_degree.entry(key).or_insert(0) += 1;
+                dependents.entry(dep_ref).or_default().push(key);
+            }
+        }
+    }
+
+    let mut queue: VecDeque<&String> = in_degree
+        .iter()
+        .filter(|(_, &deg)| deg == 0)
+        .map(|(&k, _)| k)
+        .collect();
+
+    let mut sorted = Vec::new();
+    while let Some(node) = queue.pop_front() {
+        sorted.push(node.clone());
+        if let Some(deps) = dependents.get(node) {
+            for dep in deps {
+                if let Some(deg) = in_degree.get_mut(dep) {
+                    *deg -= 1;
+                    if *deg == 0 {
+                        queue.push_back(dep);
+                    }
+                }
+            }
+        }
+    }
+
+    if sorted.len() != all_keys.len() {
+        return Err("Circular dependency detected".to_string());
+    }
+
+    Ok(sorted)
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn bundle<'a>(
+    env: Env<'a>,
+    files: Vec<(String, String)>,
+    do_minify: bool,
+) -> NifResult<Term<'a>> {
+    // Build a map of normalized name → (filename, source)
+    let mut file_map: HashMap<String, (String, String)> = HashMap::new();
+    for (filename, source) in &files {
+        let key = normalize_specifier(
+            Path::new(filename)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(filename),
+        );
+        file_map.insert(key, (filename.clone(), source.clone()));
+    }
+
+    // Transform each module and collect dependency info
+    let mut transformed: HashMap<String, String> = HashMap::new();
+    let mut deps: HashMap<String, Vec<String>> = HashMap::new();
+
+    for (key, (filename, source)) in &file_map {
+        let allocator = Allocator::default();
+        match transform_module(&allocator, source, filename) {
+            Ok((code, imports)) => {
+                transformed.insert(key.clone(), code);
+                deps.insert(key.clone(), imports);
+            }
+            Err(errors) => {
+                return Ok((atoms::error(), errors).encode(env));
+            }
+        }
+    }
+
+    // Topologically sort
+    let order = match topo_sort(&deps) {
+        Ok(order) => order,
+        Err(msg) => return Ok((atoms::error(), vec![msg]).encode(env)),
+    };
+
+    // Concatenate in dependency order, wrapped in IIFE
+    let mut output = String::from("(() => {\n");
+    for key in &order {
+        if let Some(code) = transformed.get(key) {
+            output.push_str(code);
+            output.push('\n');
+        }
+    }
+    output.push_str("})();\n");
+
+    // Optionally minify the result
+    if do_minify {
+        let allocator = Allocator::default();
+        let source_type = SourceType::default();
+        let ret = Parser::new(&allocator, &output, source_type)
+            .with_options(ParseOptions {
+                parse_regular_expression: true,
+                ..ParseOptions::default()
+            })
+            .parse();
+
+        if !ret.errors.is_empty() {
+            let msgs = format_errors(&ret.errors);
+            return Ok((atoms::error(), msgs).encode(env));
+        }
+
+        let mut program = ret.program;
+        let options = MinifierOptions {
+            mangle: Some(MangleOptions::default()),
+            compress: Some(CompressOptions::default()),
+        };
+        let min_ret = Minifier::new(options).minify(&allocator, &mut program);
+        let CodegenReturn { code, .. } = Codegen::new()
+            .with_options(CodegenOptions::minify())
+            .with_scoping(min_ret.scoping)
+            .build(&program);
+        output = code;
+    }
+
+    Ok((atoms::ok(), output).encode(env))
 }
 
 rustler::init!("Elixir.OXC.Native");

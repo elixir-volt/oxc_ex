@@ -168,6 +168,55 @@ defmodule OXC do
   end
 
   @doc """
+  Bundle multiple TypeScript/JavaScript modules into a single IIFE script.
+
+  Takes a list of `{filename, source}` tuples representing modules that import
+  from each other via relative paths (e.g. `import { Foo } from './foo'`).
+
+  The bundler:
+  1. Transforms each module (strips TypeScript, JSX)
+  2. Resolves the dependency graph from import statements
+  3. Topologically sorts modules
+  4. Strips `import`/`export` syntax (declarations are kept in scope)
+  5. Concatenates in dependency order, wrapped in `(() => { ... })()`
+  6. Optionally minifies the result
+
+  ## Options
+
+    * `:minify` — minify the output (default: `false`)
+
+  ## Examples
+
+      iex> files = [
+      ...>   {"event.ts", "export class Event { type: string; constructor(type: string) { this.type = type } }"},
+      ...>   {"target.ts", "import { Event } from './event'\\nexport class Target { dispatch(e: Event) { return e.type } }"}
+      ...> ]
+      iex> {:ok, js} = OXC.bundle(files)
+      iex> js =~ "class Event"
+      true
+      iex> js =~ "class Target"
+      true
+      iex> js =~ "import"
+      false
+  """
+  @spec bundle([{String.t(), String.t()}], keyword()) :: {:ok, String.t()} | {:error, [String.t()]}
+  def bundle(files, opts \\ []) do
+    do_minify = Keyword.get(opts, :minify, false)
+    OXC.Native.bundle(files, do_minify)
+  end
+
+  @doc """
+  Like `bundle/2` but raises on errors.
+  """
+  @spec bundle!([{String.t(), String.t()}], keyword()) :: String.t()
+  def bundle!(files, opts \\ []) do
+    case bundle(files, opts) do
+      {:ok, code} -> code
+      {:error, errors} -> raise "OXC bundle error: #{inspect(errors)}"
+    end
+  end
+
+  @doc """
   Walk an AST tree, calling `fun` on every node (any map with a `type` key).
 
   ## Examples

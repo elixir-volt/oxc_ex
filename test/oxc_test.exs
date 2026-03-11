@@ -1,5 +1,6 @@
 defmodule OXCTest do
   use ExUnit.Case, async: true
+  doctest OXC
 
   describe "parse/2" do
     test "parses simple variable declaration" do

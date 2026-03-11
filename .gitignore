@@ -17,7 +17,7 @@ erl_crash.dump
 *.ez
 
 # Ignore package tarball (built via "mix hex.build").
-oxc_ex-*.tar
+oxc-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
@@ -25,3 +25,4 @@ oxc_ex-*.tar
 # Rust binary artifacts
 /target/
 priv/native/
+/doc/

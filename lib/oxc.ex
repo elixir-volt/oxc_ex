@@ -1,18 +1,18 @@
 defmodule OXC do
   @moduledoc """
-  Elixir bindings for the OXC JavaScript toolchain.
+  Elixir bindings for the [OXC](https://oxc.rs) JavaScript toolchain.
 
   Provides fast JavaScript and TypeScript parsing, transformation, and
-  minification via OXC's Rust toolchain. The file extension determines
-  the dialect — `.js`, `.jsx`, `.ts`, `.tsx`.
+  minification via Rust NIFs. The file extension determines the dialect —
+  `.js`, `.jsx`, `.ts`, `.tsx`.
 
-      {:ok, ast} = OXC.parse("const x = 1 + 2", "test.js")
-      ast.type  # "Program"
+      iex> {:ok, ast} = OXC.parse("const x = 1 + 2", "test.js")
+      iex> ast.type
+      "Program"
 
-      {:ok, js} = OXC.transform("const x: number = 42", "test.ts")
-      # "const x = 42;\\n"
-
-      {:ok, min} = OXC.minify("const x = 1 + 2; console.log(x);", "test.js")
+      iex> {:ok, js} = OXC.transform("const x: number = 42", "test.ts")
+      iex> js
+      "const x = 42;\\n"
 
   AST nodes are maps with atom keys, following the ESTree specification.
   """
@@ -35,10 +35,14 @@ defmodule OXC do
 
   ## Examples
 
-      {:ok, ast} = OXC.parse("const x = 1", "test.js")
-      [%{type: "VariableDeclaration"}] = ast.body
+      iex> {:ok, ast} = OXC.parse("const x = 1", "test.js")
+      iex> [decl] = ast.body
+      iex> decl.type
+      "VariableDeclaration"
 
-      {:error, errors} = OXC.parse("const = ;", "bad.js")
+      iex> {:error, [%{message: msg} | _]} = OXC.parse("const = ;", "bad.js")
+      iex> is_binary(msg)
+      true
   """
   @spec parse(String.t(), String.t()) :: parse_result()
   def parse(source, filename) do
@@ -48,7 +52,11 @@ defmodule OXC do
   @doc """
   Like `parse/2` but raises on parse errors.
 
-      ast = OXC.parse!("const x = 1", "test.js")
+  ## Examples
+
+      iex> ast = OXC.parse!("const x = 1", "test.js")
+      iex> ast.type
+      "Program"
   """
   @spec parse!(String.t(), String.t()) :: ast()
   def parse!(source, filename) do
@@ -63,8 +71,13 @@ defmodule OXC do
 
   Faster than `parse/2` — skips AST serialization.
 
-      OXC.valid?("const x = 1", "test.js")  # true
-      OXC.valid?("const = ;", "bad.js")      # false
+  ## Examples
+
+      iex> OXC.valid?("const x = 1", "test.js")
+      true
+
+      iex> OXC.valid?("const = ;", "bad.js")
+      false
   """
   @spec valid?(String.t(), String.t()) :: boolean()
   def valid?(source, filename) do
@@ -83,9 +96,13 @@ defmodule OXC do
 
   ## Examples
 
-      {:ok, js} = OXC.transform("const x: number = 42", "test.ts")
+      iex> {:ok, js} = OXC.transform("const x: number = 42", "test.ts")
+      iex> js
+      "const x = 42;\\n"
 
-      {:ok, js} = OXC.transform("<App />", "app.tsx", jsx: :classic)
+      iex> {:ok, js} = OXC.transform("<div />", "c.jsx", jsx: :classic)
+      iex> js =~ "createElement"
+      true
   """
   @spec transform(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [String.t()]}
   def transform(source, filename, opts \\ []) do
@@ -95,6 +112,11 @@ defmodule OXC do
 
   @doc """
   Like `transform/3` but raises on errors.
+
+  ## Examples
+
+      iex> OXC.transform!("const x: number = 42", "test.ts")
+      "const x = 42;\\n"
   """
   @spec transform!(String.t(), String.t(), keyword()) :: String.t()
   def transform!(source, filename, opts \\ []) do
@@ -116,9 +138,11 @@ defmodule OXC do
 
   ## Examples
 
-      {:ok, min} = OXC.minify("const x = 1 + 2; console.log(x);", "test.js")
-
-      {:ok, min} = OXC.minify("const longName = 1;", "test.js", mangle: false)
+      iex> {:ok, min} = OXC.minify("if (false) { x() } y();", "test.js")
+      iex> min =~ "y()"
+      true
+      iex> min =~ "x()"
+      false
   """
   @spec minify(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [String.t()]}
   def minify(source, filename, opts \\ []) do
@@ -128,6 +152,12 @@ defmodule OXC do
 
   @doc """
   Like `minify/3` but raises on errors.
+
+  ## Examples
+
+      iex> min = OXC.minify!("const x = 1 + 2;", "test.js")
+      iex> is_binary(min)
+      true
   """
   @spec minify!(String.t(), String.t(), keyword()) :: String.t()
   def minify!(source, filename, opts \\ []) do
@@ -142,11 +172,13 @@ defmodule OXC do
 
   ## Examples
 
-      {:ok, ast} = OXC.parse("const x = 1; let y = 2", "test.js")
-      OXC.walk(ast, fn
-        %{type: "Identifier", name: name} -> IO.puts(name)
-        _ -> :ok
-      end)
+      iex> {:ok, ast} = OXC.parse("const x = 1", "test.js")
+      iex> OXC.walk(ast, fn
+      ...>   %{type: "Identifier", name: name} -> send(self(), {:id, name})
+      ...>   _ -> :ok
+      ...> end)
+      iex> receive do {:id, name} -> name end
+      "x"
   """
   @spec walk(ast(), (map() -> any())) :: :ok
   def walk(node, fun) when is_map(node) do
@@ -174,12 +206,12 @@ defmodule OXC do
 
   ## Examples
 
-      {:ok, ast} = OXC.parse("import a from 'a'; import b from 'b'", "test.js")
-      imports = OXC.collect(ast, fn
-        %{type: "ImportDeclaration"} = node -> {:keep, node}
-        _ -> :skip
-      end)
-      length(imports)  # 2
+      iex> {:ok, ast} = OXC.parse("const x = y + z", "test.js")
+      iex> OXC.collect(ast, fn
+      ...>   %{type: "Identifier", name: name} -> {:keep, name}
+      ...>   _ -> :skip
+      ...> end)
+      ["x", "y", "z"]
   """
   @spec collect(ast(), (map() -> {:keep, any()} | :skip)) :: [any()]
   def collect(node, fun) do

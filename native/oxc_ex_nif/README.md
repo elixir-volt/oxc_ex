@@ -1,20 +1,7 @@
-# NIF for OxcEx.Native
+# oxc_ex_nif
 
-## To build the NIF module:
+Rust NIF for the [OXC](https://hex.pm/packages/oxc) Elixir package.
 
-- Your NIF will now build along with your project.
+Wraps [oxc_parser](https://crates.io/crates/oxc_parser), [oxc_transformer](https://crates.io/crates/oxc_transformer), [oxc_minifier](https://crates.io/crates/oxc_minifier), and [oxc_codegen](https://crates.io/crates/oxc_codegen) via [Rustler](https://github.com/rusterlium/rustler).
 
-## To load the NIF:
-
-```elixir
-defmodule OxcEx.Native do
-  use Rustler, otp_app: :oxc_ex, crate: "oxc_ex_nif"
-
-  # When your NIF is loaded, it will override this function.
-  def add(_a, _b), do: :erlang.nif_error(:nif_not_loaded)
-end
-```
-
-## Examples
-
-[This](https://github.com/rusterlium/NifIo) is a complete example of a NIF written in Rust.
+This crate is not meant to be used directly — it compiles automatically as part of `mix compile`.

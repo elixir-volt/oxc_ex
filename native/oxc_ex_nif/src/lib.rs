@@ -174,4 +174,4 @@ fn minify<'a>(env: Env<'a>, source: &str, filename: &str, mangle: bool) -> NifRe
     Ok((atoms::ok(), code).encode(env))
 }
 
-rustler::init!("Elixir.OxcEx.Native");
+rustler::init!("Elixir.OXC.Native");

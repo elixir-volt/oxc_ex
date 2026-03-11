@@ -1,4 +1,4 @@
-defmodule OxcEx do
+defmodule OXC do
   @moduledoc """
   Elixir bindings for the OXC JavaScript toolchain.
 
@@ -6,13 +6,13 @@ defmodule OxcEx do
   minification via OXC's Rust toolchain. The file extension determines
   the dialect — `.js`, `.jsx`, `.ts`, `.tsx`.
 
-      {:ok, ast} = OxcEx.parse("const x = 1 + 2", "test.js")
+      {:ok, ast} = OXC.parse("const x = 1 + 2", "test.js")
       ast.type  # "Program"
 
-      {:ok, js} = OxcEx.transform("const x: number = 42", "test.ts")
+      {:ok, js} = OXC.transform("const x: number = 42", "test.ts")
       # "const x = 42;\\n"
 
-      {:ok, min} = OxcEx.minify("const x = 1 + 2; console.log(x);", "test.js")
+      {:ok, min} = OXC.minify("const x = 1 + 2; console.log(x);", "test.js")
 
   AST nodes are maps with atom keys, following the ESTree specification.
   """
@@ -35,20 +35,20 @@ defmodule OxcEx do
 
   ## Examples
 
-      {:ok, ast} = OxcEx.parse("const x = 1", "test.js")
+      {:ok, ast} = OXC.parse("const x = 1", "test.js")
       [%{type: "VariableDeclaration"}] = ast.body
 
-      {:error, errors} = OxcEx.parse("const = ;", "bad.js")
+      {:error, errors} = OXC.parse("const = ;", "bad.js")
   """
   @spec parse(String.t(), String.t()) :: parse_result()
   def parse(source, filename) do
-    OxcEx.Native.parse(source, filename)
+    OXC.Native.parse(source, filename)
   end
 
   @doc """
   Like `parse/2` but raises on parse errors.
 
-      ast = OxcEx.parse!("const x = 1", "test.js")
+      ast = OXC.parse!("const x = 1", "test.js")
   """
   @spec parse!(String.t(), String.t()) :: ast()
   def parse!(source, filename) do
@@ -63,12 +63,12 @@ defmodule OxcEx do
 
   Faster than `parse/2` — skips AST serialization.
 
-      OxcEx.valid?("const x = 1", "test.js")  # true
-      OxcEx.valid?("const = ;", "bad.js")      # false
+      OXC.valid?("const x = 1", "test.js")  # true
+      OXC.valid?("const = ;", "bad.js")      # false
   """
   @spec valid?(String.t(), String.t()) :: boolean()
   def valid?(source, filename) do
-    OxcEx.Native.valid(source, filename)
+    OXC.Native.valid(source, filename)
   end
 
   @doc """
@@ -83,14 +83,14 @@ defmodule OxcEx do
 
   ## Examples
 
-      {:ok, js} = OxcEx.transform("const x: number = 42", "test.ts")
+      {:ok, js} = OXC.transform("const x: number = 42", "test.ts")
 
-      {:ok, js} = OxcEx.transform("<App />", "app.tsx", jsx: :classic)
+      {:ok, js} = OXC.transform("<App />", "app.tsx", jsx: :classic)
   """
   @spec transform(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [String.t()]}
   def transform(source, filename, opts \\ []) do
     jsx_runtime = opts |> Keyword.get(:jsx, :automatic) |> Atom.to_string()
-    OxcEx.Native.transform(source, filename, jsx_runtime)
+    OXC.Native.transform(source, filename, jsx_runtime)
   end
 
   @doc """
@@ -116,14 +116,14 @@ defmodule OxcEx do
 
   ## Examples
 
-      {:ok, min} = OxcEx.minify("const x = 1 + 2; console.log(x);", "test.js")
+      {:ok, min} = OXC.minify("const x = 1 + 2; console.log(x);", "test.js")
 
-      {:ok, min} = OxcEx.minify("const longName = 1;", "test.js", mangle: false)
+      {:ok, min} = OXC.minify("const longName = 1;", "test.js", mangle: false)
   """
   @spec minify(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [String.t()]}
   def minify(source, filename, opts \\ []) do
     mangle = Keyword.get(opts, :mangle, true)
-    OxcEx.Native.minify(source, filename, mangle)
+    OXC.Native.minify(source, filename, mangle)
   end
 
   @doc """
@@ -142,8 +142,8 @@ defmodule OxcEx do
 
   ## Examples
 
-      {:ok, ast} = OxcEx.parse("const x = 1; let y = 2", "test.js")
-      OxcEx.walk(ast, fn
+      {:ok, ast} = OXC.parse("const x = 1; let y = 2", "test.js")
+      OXC.walk(ast, fn
         %{type: "Identifier", name: name} -> IO.puts(name)
         _ -> :ok
       end)
@@ -174,8 +174,8 @@ defmodule OxcEx do
 
   ## Examples
 
-      {:ok, ast} = OxcEx.parse("import a from 'a'; import b from 'b'", "test.js")
-      imports = OxcEx.collect(ast, fn
+      {:ok, ast} = OXC.parse("import a from 'a'; import b from 'b'", "test.js")
+      imports = OXC.collect(ast, fn
         %{type: "ImportDeclaration"} = node -> {:keep, node}
         _ -> :skip
       end)

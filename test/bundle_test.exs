@@ -94,6 +94,20 @@ defmodule OXC.BundleTest do
       refute js =~ "export"
     end
 
+    test "emits alias for renamed export specifiers" do
+      files = [
+        {"impl.ts",
+         "function greetImpl() { return 'hi' }\nexport { greetImpl as greet }"},
+        {"main.ts", "import { greet } from './impl'\n(globalThis as any).g = greet;"}
+      ]
+
+      {:ok, js} = OXC.bundle(files)
+      assert js =~ "function greetImpl()"
+      assert js =~ "var greet = greetImpl"
+      refute js =~ "export"
+      refute js =~ "import"
+    end
+
     test "drops bare re-export specifiers" do
       files = [
         {"a.ts", "export const x = 1;"},

@@ -234,6 +234,7 @@ fn transform_module(
     }
 
     // Strip module syntax: remove imports, unwrap exports
+    let mut aliases: Vec<(String, String)> = Vec::new();
     let mut new_body = oxc_allocator::Vec::new_in(allocator);
     for stmt in program.body.into_iter() {
         match stmt {
@@ -247,7 +248,14 @@ fn transform_module(
                 if let Some(declaration) = inner.declaration {
                     new_body.push(Statement::from(declaration));
                 }
-                // `export { Foo }` without declaration — drop (already in scope)
+                // `export { local as exported }` without declaration — emit alias if renamed
+                for spec in inner.specifiers.iter() {
+                    let local = spec.local.name().as_str();
+                    let exported = spec.exported.name().as_str();
+                    if local != exported {
+                        aliases.push((local.to_string(), exported.to_string()));
+                    }
+                }
             }
             // `export default expr` → keep as expression statement
             Statement::ExportDefaultDeclaration(decl) => {
@@ -260,10 +268,7 @@ fn transform_module(
                         new_body.push(Statement::ClassDeclaration(c));
                     }
                     oxc_ast::ast::ExportDefaultDeclarationKind::TSInterfaceDeclaration(_) => {}
-                    _ => {
-                        // Expression default exports — wrap in expression statement
-                        // This is rare in our use case, skip for now
-                    }
+                    _ => {}
                 }
             }
             // Keep everything else as-is
@@ -273,7 +278,14 @@ fn transform_module(
     program.body = new_body;
 
     let CodegenReturn { code, .. } = Codegen::new().build(&program);
-    Ok((code, imports))
+
+    // Append alias declarations for renamed exports: `export { fetchImpl as fetch }`
+    let mut result = code;
+    for (local, exported) in &aliases {
+        result.push_str(&format!("var {exported} = {local};\n"));
+    }
+
+    Ok((result, imports))
 }
 
 /// Topologically sort modules by their import dependencies (Kahn's algorithm).

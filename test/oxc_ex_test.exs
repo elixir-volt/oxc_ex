@@ -180,6 +180,142 @@ defmodule OxcExTest do
     end
   end
 
+  describe "transform/3" do
+    test "strips TypeScript types" do
+      {:ok, js} = OxcEx.transform("const x: number = 42", "test.ts")
+      assert js =~ "const x = 42"
+      refute js =~ "number"
+    end
+
+    test "strips interface declarations" do
+      {:ok, js} = OxcEx.transform("interface Foo { bar: string }\nconst x = 1", "test.ts")
+      assert js =~ "const x = 1"
+      refute js =~ "interface"
+    end
+
+    test "transforms JSX with automatic runtime" do
+      {:ok, js} = OxcEx.transform("<div>hello</div>", "test.jsx")
+      assert js =~ "jsx"
+      refute js =~ "<div>"
+    end
+
+    test "transforms JSX with classic runtime" do
+      {:ok, js} = OxcEx.transform("<div>hello</div>", "test.jsx", jsx: :classic)
+      assert js =~ "createElement"
+      refute js =~ "<div>"
+    end
+
+    test "transforms TSX" do
+      {:ok, js} = OxcEx.transform("const el: JSX.Element = <App />", "test.tsx")
+      refute js =~ "JSX.Element"
+      assert js =~ "jsx" or js =~ "createElement"
+    end
+
+    test "preserves plain JS unchanged" do
+      {:ok, js} = OxcEx.transform("const x = 1 + 2", "test.js")
+      assert js =~ "const x = 1 + 2"
+    end
+
+    test "returns errors for invalid syntax" do
+      {:error, errors} = OxcEx.transform("const = ;", "bad.ts")
+      assert is_list(errors)
+      assert length(errors) > 0
+    end
+
+    test "handles enum transformation" do
+      {:ok, js} = OxcEx.transform("enum Color { Red, Green, Blue }", "test.ts")
+      refute js =~ "enum"
+      assert js =~ "Red"
+    end
+
+    test "strips type-only imports" do
+      {:ok, js} = OxcEx.transform("import type { Foo } from 'bar'", "test.ts")
+      refute js =~ "import"
+    end
+  end
+
+  describe "transform!/3" do
+    test "returns code on success" do
+      js = OxcEx.transform!("const x: number = 42", "test.ts")
+      assert js =~ "const x = 42"
+    end
+
+    test "raises on error" do
+      assert_raise RuntimeError, ~r/transform error/, fn ->
+        OxcEx.transform!("const = ;", "bad.ts")
+      end
+    end
+  end
+
+  describe "minify/3" do
+    test "minifies JavaScript" do
+      {:ok, min} = OxcEx.minify("const x = 1 + 2;\nconsole.log(x);", "test.js")
+      assert byte_size(min) < byte_size("const x = 1 + 2;\nconsole.log(x);")
+      assert min =~ "console.log"
+    end
+
+    test "folds constants" do
+      {:ok, min} = OxcEx.minify("const x = 1 + 2; console.log(x);", "test.js")
+      assert min =~ "3"
+    end
+
+    test "mangles variable names by default" do
+      {:ok, min} =
+        OxcEx.minify(
+          "function hello() { const longVariableName = 42; return longVariableName; }",
+          "test.js"
+        )
+
+      refute min =~ "longVariableName"
+    end
+
+    test "preserves variable names with mangle: false" do
+      {:ok, min} =
+        OxcEx.minify("function hello(longName) { return longName; }", "test.js", mangle: false)
+
+      assert min =~ "longName"
+    end
+
+    test "removes dead code" do
+      {:ok, min} =
+        OxcEx.minify("if (false) { console.log('dead') } console.log('alive')", "test.js")
+
+      refute min =~ "dead"
+      assert min =~ "alive"
+    end
+
+    test "removes whitespace and newlines" do
+      source = "const   x   =   1;\n\n\nconst   y   =   2;"
+      {:ok, min} = OxcEx.minify(source, "test.js")
+      refute min =~ "   "
+      refute min =~ "\n\n"
+    end
+
+    test "returns errors for invalid syntax" do
+      {:error, errors} = OxcEx.minify("const = ;", "bad.js")
+      assert is_list(errors)
+      assert length(errors) > 0
+    end
+
+    test "handles empty input" do
+      {:ok, min} = OxcEx.minify("", "test.js")
+      assert min == ""
+    end
+  end
+
+  describe "minify!/3" do
+    test "returns code on success" do
+      min = OxcEx.minify!("const x = 1 + 2;", "test.js")
+      assert is_binary(min)
+    end
+
+    test "raises on error" do
+      assert_raise RuntimeError, ~r/minify error/, fn ->
+        OxcEx.minify!("const = ;", "bad.js")
+      end
+    end
+  end
+
   defp collect_identifiers(ast) do
     OxcEx.collect(ast, fn
       %{type: "Identifier", name: name} -> {:keep, name}

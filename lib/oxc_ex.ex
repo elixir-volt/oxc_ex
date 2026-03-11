@@ -2,11 +2,17 @@ defmodule OxcEx do
   @moduledoc """
   Elixir bindings for the OXC JavaScript toolchain.
 
-  Provides fast JavaScript and TypeScript parsing via OXC's Rust parser.
-  The file extension determines the dialect — `.js`, `.jsx`, `.ts`, `.tsx`.
+  Provides fast JavaScript and TypeScript parsing, transformation, and
+  minification via OXC's Rust toolchain. The file extension determines
+  the dialect — `.js`, `.jsx`, `.ts`, `.tsx`.
 
       {:ok, ast} = OxcEx.parse("const x = 1 + 2", "test.js")
       ast.type  # "Program"
+
+      {:ok, js} = OxcEx.transform("const x: number = 42", "test.ts")
+      # "const x = 42;\\n"
+
+      {:ok, min} = OxcEx.minify("const x = 1 + 2; console.log(x);", "test.js")
 
   AST nodes are maps with atom keys, following the ESTree specification.
   """
@@ -63,6 +69,72 @@ defmodule OxcEx do
   @spec valid?(String.t(), String.t()) :: boolean()
   def valid?(source, filename) do
     OxcEx.Native.valid(source, filename)
+  end
+
+  @doc """
+  Transform TypeScript/JSX source code into plain JavaScript.
+
+  Strips type annotations, transforms JSX, and lowers syntax features.
+  The filename extension determines the source dialect.
+
+  ## Options
+
+    * `:jsx` — JSX runtime, `:automatic` (default) or `:classic`
+
+  ## Examples
+
+      {:ok, js} = OxcEx.transform("const x: number = 42", "test.ts")
+
+      {:ok, js} = OxcEx.transform("<App />", "app.tsx", jsx: :classic)
+  """
+  @spec transform(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [String.t()]}
+  def transform(source, filename, opts \\ []) do
+    jsx_runtime = opts |> Keyword.get(:jsx, :automatic) |> Atom.to_string()
+    OxcEx.Native.transform(source, filename, jsx_runtime)
+  end
+
+  @doc """
+  Like `transform/3` but raises on errors.
+  """
+  @spec transform!(String.t(), String.t(), keyword()) :: String.t()
+  def transform!(source, filename, opts \\ []) do
+    case transform(source, filename, opts) do
+      {:ok, code} -> code
+      {:error, errors} -> raise "OXC transform error: #{inspect(errors)}"
+    end
+  end
+
+  @doc """
+  Minify JavaScript source code.
+
+  Applies dead code elimination, constant folding, and whitespace removal.
+  Optionally mangles variable names for smaller output.
+
+  ## Options
+
+    * `:mangle` — rename variables for shorter names (default: `true`)
+
+  ## Examples
+
+      {:ok, min} = OxcEx.minify("const x = 1 + 2; console.log(x);", "test.js")
+
+      {:ok, min} = OxcEx.minify("const longName = 1;", "test.js", mangle: false)
+  """
+  @spec minify(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [String.t()]}
+  def minify(source, filename, opts \\ []) do
+    mangle = Keyword.get(opts, :mangle, true)
+    OxcEx.Native.minify(source, filename, mangle)
+  end
+
+  @doc """
+  Like `minify/3` but raises on errors.
+  """
+  @spec minify!(String.t(), String.t(), keyword()) :: String.t()
+  def minify!(source, filename, opts \\ []) do
+    case minify(source, filename, opts) do
+      {:ok, code} -> code
+      {:error, errors} -> raise "OXC minify error: #{inspect(errors)}"
+    end
   end
 
   @doc """

@@ -13,6 +13,7 @@ defmodule OXC.Native do
   @spec minify(String.t(), String.t(), boolean()) :: {:ok, String.t()} | {:error, list()}
   def minify(_source, _filename, _mangle), do: :erlang.nif_error(:nif_not_loaded)
 
-  @spec bundle([{String.t(), String.t()}], boolean()) :: {:ok, String.t()} | {:error, [String.t()]}
-  def bundle(_files, _minify), do: :erlang.nif_error(:nif_not_loaded)
+  @spec bundle([{String.t(), String.t()}], keyword()) ::
+          {:ok, String.t() | map()} | {:error, [String.t()]}
+  def bundle(_files, _opts), do: :erlang.nif_error(:nif_not_loaded)
 end

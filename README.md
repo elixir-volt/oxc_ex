@@ -9,6 +9,7 @@ Parse, transform, and minify JavaScript/TypeScript at native speed.
 - **Parse** JS/TS/JSX/TSX into ESTree AST (maps with atom keys)
 - **Transform** TypeScript → JavaScript, JSX → `createElement`/`jsx` calls
 - **Minify** with dead code elimination, constant folding, and variable mangling
+- **Bundle** multiple TS/JS modules into a single IIFE with dependency resolution
 - **Walk/Collect** helpers for AST traversal and node filtering
 
 ## Installation
@@ -16,7 +17,7 @@ Parse, transform, and minify JavaScript/TypeScript at native speed.
 ```elixir
 def deps do
   [
-    {:oxc, "~> 0.1.0"}
+    {:oxc, "~> 0.2.0"}
   ]
 end
 ```
@@ -100,6 +101,40 @@ end)
 # [%{type: "ImportDeclaration", source: %{value: "a"}, ...}, ...]
 ```
 
+### Bundle
+
+Bundle multiple TypeScript/JavaScript modules into a single IIFE script.
+Resolves import dependencies, topologically sorts, strips `import`/`export` syntax:
+
+```elixir
+files = [
+  {"event.ts", "export class Event { type: string; constructor(t: string) { this.type = t } }"},
+  {"target.ts", "import { Event } from './event'\nexport class Target extends Event {}"}
+]
+
+{:ok, js} = OXC.bundle(files)
+# (() => { class Event { ... } class Target extends Event { } })();
+```
+
+Options:
+
+```elixir
+# Minify with tree-shaking and variable mangling
+{:ok, js} = OXC.bundle(files, minify: true)
+
+# Compile-time replacements (like esbuild/Bun define)
+{:ok, js} = OXC.bundle(files, define: %{"process.env.NODE_ENV" => ~s("production")})
+
+# Source maps
+{:ok, %{code: js, sourcemap: map}} = OXC.bundle(files, sourcemap: true)
+
+# Remove console.* calls
+{:ok, js} = OXC.bundle(files, minify: true, drop_console: true)
+
+# Banner and footer
+{:ok, js} = OXC.bundle(files, banner: "/* MIT */", footer: "/* v1.0 */")
+```
+
 ### Bang Variants
 
 All functions have bang variants that raise on error:
@@ -113,8 +148,8 @@ min = OXC.minify!("const x = 1 + 2;", "test.js")
 ## How It Works
 
 OXC is a collection of high-performance JavaScript tools written in Rust.
-This library wraps `oxc_parser`, `oxc_transformer`, `oxc_minifier`, and
-`oxc_codegen` via [Rustler](https://github.com/rusterlium/rustler) NIFs.
+This library wraps `oxc_parser`, `oxc_transformer`, `oxc_minifier`,
+`oxc_transformer_plugins`, and `oxc_codegen` via [Rustler](https://github.com/rusterlium/rustler) NIFs.
 
 All NIF calls run on the dirty CPU scheduler so they don't block the BEAM.
 The parser produces JSON via OXC's ESTree serializer, which is then

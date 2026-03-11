@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use oxc_allocator::Allocator;
 use oxc_ast::ast::{ImportOrExportKind, Statement};
@@ -9,6 +9,7 @@ use oxc_parser::{ParseOptions, Parser};
 use oxc_semantic::SemanticBuilder;
 use oxc_span::SourceType;
 use oxc_transformer::{JsxRuntime, TransformOptions, Transformer};
+use oxc_transformer_plugins::{ReplaceGlobalDefines, ReplaceGlobalDefinesConfig};
 use rustler::{Encoder, Env, NifResult, Term};
 use serde_json::Value;
 
@@ -225,9 +226,8 @@ fn transform_module(
         .semantic
         .into_scoping();
 
-    let result =
-        Transformer::new(allocator, path, &TransformOptions::default())
-            .build_with_scoping(scoping, &mut program);
+    let result = Transformer::new(allocator, path, &TransformOptions::default())
+        .build_with_scoping(scoping, &mut program);
 
     if !result.errors.is_empty() {
         return Err(format_errors(&result.errors));
@@ -277,9 +277,7 @@ fn transform_module(
 }
 
 /// Topologically sort modules by their import dependencies (Kahn's algorithm).
-fn topo_sort(
-    modules: &HashMap<String, Vec<String>>,
-) -> Result<Vec<String>, String> {
+fn topo_sort(modules: &HashMap<String, Vec<String>>) -> Result<Vec<String>, String> {
     let all_keys: HashSet<&String> = modules.keys().collect();
 
     // Build adjacency: dep → dependents (for Kahn's)
@@ -328,12 +326,66 @@ fn topo_sort(
     Ok(sorted)
 }
 
+/// Decoded bundle options from Elixir keyword list.
+struct BundleOptions {
+    minify: bool,
+    banner: Option<String>,
+    footer: Option<String>,
+    define: Vec<(String, String)>,
+    sourcemap: bool,
+    drop_console: bool,
+}
+
+impl BundleOptions {
+    fn from_term(env: Env<'_>, term: Term<'_>) -> Self {
+        let mut opts = Self {
+            minify: false,
+            banner: None,
+            footer: None,
+            define: Vec::new(),
+            sourcemap: false,
+            drop_console: false,
+        };
+
+        let minify_atom = rustler::types::atom::Atom::from_str(env, "minify").unwrap();
+        let banner_atom = rustler::types::atom::Atom::from_str(env, "banner").unwrap();
+        let footer_atom = rustler::types::atom::Atom::from_str(env, "footer").unwrap();
+        let sourcemap_atom = rustler::types::atom::Atom::from_str(env, "sourcemap").unwrap();
+        let drop_console_atom = rustler::types::atom::Atom::from_str(env, "drop_console").unwrap();
+        let define_atom = rustler::types::atom::Atom::from_str(env, "define").unwrap();
+
+        if let Ok(list) = term.decode::<Vec<(rustler::Atom, Term<'_>)>>() {
+            for (key, val) in list {
+                if key == minify_atom {
+                    opts.minify = val.decode::<bool>().unwrap_or(false);
+                } else if key == banner_atom {
+                    opts.banner = val.decode::<String>().ok();
+                } else if key == footer_atom {
+                    opts.footer = val.decode::<String>().ok();
+                } else if key == sourcemap_atom {
+                    opts.sourcemap = val.decode::<bool>().unwrap_or(false);
+                } else if key == drop_console_atom {
+                    opts.drop_console = val.decode::<bool>().unwrap_or(false);
+                } else if key == define_atom {
+                    if let Ok(map) = val.decode::<HashMap<String, String>>() {
+                        opts.define = map.into_iter().collect();
+                    }
+                }
+            }
+        }
+
+        opts
+    }
+}
+
 #[rustler::nif(schedule = "DirtyCpu")]
 fn bundle<'a>(
     env: Env<'a>,
     files: Vec<(String, String)>,
-    do_minify: bool,
+    opts_term: Term<'a>,
 ) -> NifResult<Term<'a>> {
+    let opts = BundleOptions::from_term(env, opts_term);
+
     // Build a map of normalized name → (filename, source)
     let mut file_map: HashMap<String, (String, String)> = HashMap::new();
     for (filename, source) in &files {
@@ -370,7 +422,12 @@ fn bundle<'a>(
     };
 
     // Concatenate in dependency order, wrapped in IIFE
-    let mut output = String::from("(() => {\n");
+    let mut output = String::new();
+    if let Some(ref banner) = opts.banner {
+        output.push_str(banner);
+        output.push('\n');
+    }
+    output.push_str("(() => {\n");
     for key in &order {
         if let Some(code) = transformed.get(key) {
             output.push_str(code);
@@ -378,9 +435,46 @@ fn bundle<'a>(
         }
     }
     output.push_str("})();\n");
+    if let Some(ref footer) = opts.footer {
+        output.push_str(footer);
+        output.push('\n');
+    }
 
-    // Optionally minify the result
-    if do_minify {
+    // Apply define replacements
+    if !opts.define.is_empty() {
+        let allocator = Allocator::default();
+        let source_type = SourceType::default();
+        let ret = Parser::new(&allocator, &output, source_type)
+            .with_options(ParseOptions {
+                parse_regular_expression: true,
+                ..ParseOptions::default()
+            })
+            .parse();
+
+        if ret.errors.is_empty() {
+            let mut program = ret.program;
+            let scoping = SemanticBuilder::new()
+                .build(&program)
+                .semantic
+                .into_scoping();
+
+            let define_pairs: Vec<(&str, &str)> = opts
+                .define
+                .iter()
+                .map(|(k, v)| (k.as_str(), v.as_str()))
+                .collect();
+
+            if let Ok(config) = ReplaceGlobalDefinesConfig::new(&define_pairs) {
+                let _ = ReplaceGlobalDefines::new(&allocator, config).build(scoping, &mut program);
+                let CodegenReturn { code, .. } = Codegen::new().build(&program);
+                output = code;
+            }
+        }
+    }
+
+    // Minify
+    let mut source_map: Option<String> = None;
+    if opts.minify {
         let allocator = Allocator::default();
         let source_type = SourceType::default();
         let ret = Parser::new(&allocator, &output, source_type)
@@ -396,19 +490,73 @@ fn bundle<'a>(
         }
 
         let mut program = ret.program;
+        let mut compress = CompressOptions::default();
+        if opts.drop_console {
+            compress.drop_console = true;
+        }
         let options = MinifierOptions {
             mangle: Some(MangleOptions::default()),
-            compress: Some(CompressOptions::default()),
+            compress: Some(compress),
         };
         let min_ret = Minifier::new(options).minify(&allocator, &mut program);
-        let CodegenReturn { code, .. } = Codegen::new()
-            .with_options(CodegenOptions::minify())
+
+        let mut codegen_opts = CodegenOptions::minify();
+        if opts.sourcemap {
+            codegen_opts.source_map_path = Some(PathBuf::from("bundle.js"));
+        }
+        let CodegenReturn { code, map, .. } = Codegen::new()
+            .with_options(codegen_opts)
             .with_scoping(min_ret.scoping)
             .build(&program);
         output = code;
+        if let Some(map) = map {
+            source_map = Some(map.to_json_string());
+        }
+    } else if opts.sourcemap {
+        // Sourcemap without minification
+        let allocator = Allocator::default();
+        let source_type = SourceType::default();
+        let ret = Parser::new(&allocator, &output, source_type)
+            .with_options(ParseOptions {
+                parse_regular_expression: true,
+                ..ParseOptions::default()
+            })
+            .parse();
+
+        if ret.errors.is_empty() {
+            let program = ret.program;
+            let codegen_opts = CodegenOptions {
+                source_map_path: Some(PathBuf::from("bundle.js")),
+                ..CodegenOptions::default()
+            };
+            let CodegenReturn { code, map, .. } =
+                Codegen::new().with_options(codegen_opts).build(&program);
+            output = code;
+            if let Some(map) = map {
+                source_map = Some(map.to_json_string());
+            }
+        }
     }
 
-    Ok((atoms::ok(), output).encode(env))
+    // Return {code, sourcemap} tuple when sourcemap requested, otherwise just code
+    if let Some(ref map_json) = source_map {
+        let result = Term::map_from_arrays(
+            env,
+            &[
+                rustler::types::atom::Atom::from_str(env, "code")
+                    .unwrap()
+                    .encode(env),
+                rustler::types::atom::Atom::from_str(env, "sourcemap")
+                    .unwrap()
+                    .encode(env),
+            ],
+            &[output.encode(env), map_json.encode(env)],
+        )
+        .unwrap();
+        Ok((atoms::ok(), result).encode(env))
+    } else {
+        Ok((atoms::ok(), output).encode(env))
+    }
 }
 
 rustler::init!("Elixir.OXC.Native");

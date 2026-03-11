@@ -512,8 +512,10 @@ dependencies = [
  "oxc_minifier",
  "oxc_parser",
  "oxc_semantic",
+ "oxc_sourcemap",
  "oxc_span",
  "oxc_transformer",
+ "oxc_transformer_plugins",
  "rustler",
  "serde_json",
 ]
@@ -720,6 +722,28 @@ dependencies = [
  "serde",
  "serde_json",
  "sha1",
+]
+
+[[package]]
+name = "oxc_transformer_plugins"
+version = "0.117.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "082a850ac4a397500b9d4e0eb24016ddf3b6203c2807b52ed84340e6988e4af3"
+dependencies = [
+ "cow-utils",
+ "itoa",
+ "oxc_allocator",
+ "oxc_ast",
+ "oxc_ast_visit",
+ "oxc_diagnostics",
+ "oxc_ecmascript",
+ "oxc_parser",
+ "oxc_semantic",
+ "oxc_span",
+ "oxc_syntax",
+ "oxc_transformer",
+ "oxc_traverse",
+ "rustc-hash",
 ]
 
 [[package]]

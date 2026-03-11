@@ -179,11 +179,17 @@ defmodule OXC do
   3. Topologically sorts modules
   4. Strips `import`/`export` syntax (declarations are kept in scope)
   5. Concatenates in dependency order, wrapped in `(() => { ... })()`
-  6. Optionally minifies the result
+  6. Optionally applies define replacements and minification
 
   ## Options
 
     * `:minify` — minify the output (default: `false`)
+    * `:banner` — string to prepend before the IIFE (e.g. `"/* v1.0 */"`)
+    * `:footer` — string to append after the IIFE
+    * `:define` — compile-time replacements, map of `%{"process.env.NODE_ENV" => ~s("production")}`
+    * `:sourcemap` — generate a source map (default: `false`). When `true`,
+      returns `%{code: String.t(), sourcemap: String.t()}` instead of a plain string.
+    * `:drop_console` — remove `console.*` calls during minification (default: `false`)
 
   ## Examples
 
@@ -199,19 +205,21 @@ defmodule OXC do
       iex> js =~ "import"
       false
   """
-  @spec bundle([{String.t(), String.t()}], keyword()) :: {:ok, String.t()} | {:error, [String.t()]}
+  @spec bundle([{String.t(), String.t()}], keyword()) ::
+          {:ok, String.t() | %{code: String.t(), sourcemap: String.t()}}
+          | {:error, [String.t()]}
   def bundle(files, opts \\ []) do
-    do_minify = Keyword.get(opts, :minify, false)
-    OXC.Native.bundle(files, do_minify)
+    OXC.Native.bundle(files, opts)
   end
 
   @doc """
   Like `bundle/2` but raises on errors.
   """
-  @spec bundle!([{String.t(), String.t()}], keyword()) :: String.t()
+  @spec bundle!([{String.t(), String.t()}], keyword()) ::
+          String.t() | %{code: String.t(), sourcemap: String.t()}
   def bundle!(files, opts \\ []) do
     case bundle(files, opts) do
-      {:ok, code} -> code
+      {:ok, result} -> result
       {:error, errors} -> raise "OXC bundle error: #{inspect(errors)}"
     end
   end

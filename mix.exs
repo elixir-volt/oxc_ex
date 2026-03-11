@@ -1,7 +1,7 @@
 defmodule OXC.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.0"
   @source_url "https://github.com/dannote/oxc_ex"
 
   def project do
@@ -58,7 +58,8 @@ defmodule OXC.MixProject do
         "dialyzer",
         "cmd cargo fmt --manifest-path native/oxc_ex_nif/Cargo.toml -- --check",
         "cmd cargo clippy --manifest-path native/oxc_ex_nif/Cargo.toml -- -D warnings"
-      ]
+      ],
+      ci: ["lint", "cmd MIX_ENV=test mix test"]
     ]
   end
 

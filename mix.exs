@@ -1,7 +1,7 @@
 defmodule OXC.MixProject do
   use Mix.Project
 
-  @version "0.4.0"
+  @version "0.5.0"
   @source_url "https://github.com/dannote/oxc_ex"
 
   def project do
@@ -37,7 +37,7 @@ defmodule OXC.MixProject do
         "OXC" => "https://oxc.rs"
       },
       files:
-        ~w(lib native/oxc_ex_nif/src native/oxc_ex_nif/Cargo.toml Cargo.toml Cargo.lock .formatter.exs mix.exs README.md LICENSE)
+        ~w(lib native/oxc_ex_nif/src native/oxc_ex_nif/Cargo.toml Cargo.toml Cargo.lock .formatter.exs mix.exs README.md LICENSE checksum-*.exs)
     ]
   end
 
@@ -65,7 +65,7 @@ defmodule OXC.MixProject do
 
   defp deps do
     [
-      {:rustler, "~> 0.36 or ~> 0.37"},
+      {:rustler, "~> 0.36 or ~> 0.37", optional: true},
       {:rustler_precompiled, "~> 0.8"},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

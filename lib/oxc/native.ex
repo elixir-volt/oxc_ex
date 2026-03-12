@@ -1,5 +1,12 @@
 defmodule OXC.Native do
-  use Rustler, otp_app: :oxc, crate: "oxc_ex_nif"
+  version = Mix.Project.config()[:version]
+
+  use RustlerPrecompiled,
+    otp_app: :oxc,
+    crate: "oxc_ex_nif",
+    base_url: "https://github.com/dannote/oxc_ex/releases/download/v#{version}",
+    force_build: System.get_env("OXC_EX_BUILD") in ["1", "true"],
+    version: version
 
   @spec parse(String.t(), String.t()) :: {:ok, map()} | {:error, list()}
   def parse(_source, _filename), do: :erlang.nif_error(:nif_not_loaded)

@@ -11,6 +11,8 @@ Parse, transform, and minify JavaScript/TypeScript at native speed.
 - **Minify** with dead code elimination, constant folding, and variable mangling
 - **Bundle** multiple TS/JS modules into a single IIFE with dependency resolution
 - **Walk/Collect** helpers for AST traversal and node filtering
+- **Postwalk** with accumulator for AST-based source patching (like `Macro.postwalk/3`)
+- **Patch string** — apply byte-offset patches to source (like `Sourceror.patch_string/2`)
 - **Import extraction** — fast NIF-level import specifier extraction
 
 ## Installation
@@ -18,7 +20,7 @@ Parse, transform, and minify JavaScript/TypeScript at native speed.
 ```elixir
 def deps do
   [
-    {:oxc, "~> 0.3.0"}
+    {:oxc, "~> 0.4.0"}
   ]
 end
 ```
@@ -137,6 +139,30 @@ imports = OXC.collect(ast, fn
 end)
 # [%{type: "ImportDeclaration", source: %{value: "a"}, ...}, ...]
 ```
+
+### AST Postwalk and Source Patching
+
+Rewrite source code by walking the AST and collecting byte-offset patches:
+
+```elixir
+source = "import { ref } from 'vue'\nimport { h } from 'preact'"
+{:ok, ast} = OXC.parse(source, "test.ts")
+
+{_ast, patches} =
+  OXC.postwalk(ast, [], fn
+    %{type: "ImportDeclaration", source: %{value: "vue", start: s, end: e}}, acc ->
+      {nil, [%{start: s, end: e, change: "'/@vendor/vue.js'"} | acc]}
+    node, acc ->
+      {node, acc}
+  end)
+
+rewritten = OXC.patch_string(source, patches)
+# "import { ref } from '/@vendor/vue.js'\nimport { h } from 'preact'"
+```
+
+`postwalk/2` visits nodes depth-first (children before parent), like `Macro.postwalk/2`.
+`postwalk/3` adds an accumulator for collecting data during traversal.
+`patch_string/2` applies patches in reverse offset order so positions stay valid.
 
 ### Bundle
 

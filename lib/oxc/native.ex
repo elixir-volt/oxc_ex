@@ -6,6 +6,13 @@ defmodule OXC.Native do
     crate: "oxc_ex_nif",
     base_url: "https://github.com/dannote/oxc_ex/releases/download/v#{version}",
     force_build: System.get_env("OXC_EX_BUILD") in ["1", "true"],
+    targets: ~w(
+      aarch64-apple-darwin
+      aarch64-unknown-linux-gnu
+      x86_64-apple-darwin
+      x86_64-unknown-linux-gnu
+      x86_64-unknown-linux-musl
+    ),
     version: version
 
   @spec parse(String.t(), String.t()) :: {:ok, map()} | {:error, list()}

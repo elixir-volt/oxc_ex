@@ -8,7 +8,7 @@ use oxc_minifier::{CompressOptions, MangleOptions, Minifier, MinifierOptions};
 use oxc_parser::{ParseOptions, Parser};
 use oxc_semantic::SemanticBuilder;
 use oxc_span::SourceType;
-use oxc_transformer::{JsxRuntime, TransformOptions, Transformer};
+use oxc_transformer::{EnvOptions, JsxRuntime, TransformOptions, Transformer};
 use oxc_transformer_plugins::{ReplaceGlobalDefines, ReplaceGlobalDefinesConfig};
 use rustler::{Encoder, Env, NifResult, Term};
 use serde_json::Value;
@@ -18,6 +18,8 @@ mod atoms {
         ok,
         error,
         message,
+        code,
+        sourcemap,
     }
 }
 
@@ -97,7 +99,13 @@ fn valid(source: &str, filename: &str) -> bool {
     ret.errors.is_empty()
 }
 
-fn build_jsx_options(jsx_runtime: &str, jsx_factory: &str, jsx_fragment: &str) -> TransformOptions {
+fn build_transform_options(
+    jsx_runtime: &str,
+    jsx_factory: &str,
+    jsx_fragment: &str,
+    import_source: &str,
+    target: &str,
+) -> TransformOptions {
     let mut options = TransformOptions::default();
     options.jsx.runtime = match jsx_runtime {
         "classic" => JsxRuntime::Classic,
@@ -109,10 +117,19 @@ fn build_jsx_options(jsx_runtime: &str, jsx_factory: &str, jsx_fragment: &str) -
     if !jsx_fragment.is_empty() {
         options.jsx.pragma_frag = Some(jsx_fragment.to_string());
     }
+    if !import_source.is_empty() {
+        options.jsx.import_source = Some(import_source.to_string());
+    }
+    if !target.is_empty() {
+        if let Ok(env) = EnvOptions::from_target(target) {
+            options.env = env;
+        }
+    }
     options
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
+#[allow(clippy::too_many_arguments)]
 fn transform<'a>(
     env: Env<'a>,
     source: &str,
@@ -120,6 +137,9 @@ fn transform<'a>(
     jsx_runtime: &str,
     jsx_factory: &str,
     jsx_fragment: &str,
+    import_source: &str,
+    target: &str,
+    sourcemap: bool,
 ) -> NifResult<Term<'a>> {
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(filename).unwrap_or_default();
@@ -143,7 +163,13 @@ fn transform<'a>(
         .semantic
         .into_scoping();
 
-    let options = build_jsx_options(jsx_runtime, jsx_factory, jsx_fragment);
+    let options = build_transform_options(
+        jsx_runtime,
+        jsx_factory,
+        jsx_fragment,
+        import_source,
+        target,
+    );
 
     let result =
         Transformer::new(&allocator, path, &options).build_with_scoping(scoping, &mut program);
@@ -153,8 +179,29 @@ fn transform<'a>(
         return Ok((atoms::error(), msgs).encode(env));
     }
 
-    let CodegenReturn { code, .. } = Codegen::new().build(&program);
-    Ok((atoms::ok(), code).encode(env))
+    if sourcemap {
+        let codegen_opts = CodegenOptions {
+            source_map_path: Some(PathBuf::from(filename)),
+            ..Default::default()
+        };
+        let CodegenReturn { code, map, .. } =
+            Codegen::new().with_options(codegen_opts).build(&program);
+        if let Some(map) = map {
+            let map_json = map.to_json_string();
+            let result = Term::map_from_arrays(
+                env,
+                &[atoms::code().encode(env), atoms::sourcemap().encode(env)],
+                &[code.encode(env), map_json.encode(env)],
+            )
+            .unwrap();
+            Ok((atoms::ok(), result).encode(env))
+        } else {
+            Ok((atoms::ok(), code).encode(env))
+        }
+    } else {
+        let CodegenReturn { code, .. } = Codegen::new().build(&program);
+        Ok((atoms::ok(), code).encode(env))
+    }
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -188,6 +235,34 @@ fn minify<'a>(env: Env<'a>, source: &str, filename: &str, mangle: bool) -> NifRe
         .build(&program);
 
     Ok((atoms::ok(), code).encode(env))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+fn imports<'a>(env: Env<'a>, source: &str, filename: &str) -> NifResult<Term<'a>> {
+    let allocator = Allocator::default();
+    let source_type = SourceType::from_path(filename).unwrap_or_default();
+    let ret = Parser::new(&allocator, source, source_type)
+        .with_options(ParseOptions {
+            parse_regular_expression: true,
+            ..ParseOptions::default()
+        })
+        .parse();
+
+    if !ret.errors.is_empty() {
+        let msgs = format_errors(&ret.errors);
+        return Ok((atoms::error(), msgs).encode(env));
+    }
+
+    let mut specifiers = Vec::new();
+    for stmt in ret.program.body.iter() {
+        if let Statement::ImportDeclaration(decl) = stmt {
+            if decl.import_kind != ImportOrExportKind::Type {
+                specifiers.push(decl.source.value.to_string());
+            }
+        }
+    }
+
+    Ok((atoms::ok(), specifiers).encode(env))
 }
 
 /// Normalize a module specifier like `"./foo"` or `"./foo.ts"` to a key like `"foo"`.
@@ -363,6 +438,8 @@ struct BundleOptions {
     jsx_runtime: String,
     jsx_factory: String,
     jsx_fragment: String,
+    import_source: String,
+    target: String,
 }
 
 impl BundleOptions {
@@ -377,6 +454,8 @@ impl BundleOptions {
             jsx_runtime: "automatic".to_string(),
             jsx_factory: String::new(),
             jsx_fragment: String::new(),
+            import_source: String::new(),
+            target: String::new(),
         };
 
         let minify_atom = rustler::types::atom::Atom::from_str(env, "minify").unwrap();
@@ -388,6 +467,9 @@ impl BundleOptions {
         let jsx_atom = rustler::types::atom::Atom::from_str(env, "jsx").unwrap();
         let jsx_factory_atom = rustler::types::atom::Atom::from_str(env, "jsx_factory").unwrap();
         let jsx_fragment_atom = rustler::types::atom::Atom::from_str(env, "jsx_fragment").unwrap();
+        let import_source_atom =
+            rustler::types::atom::Atom::from_str(env, "import_source").unwrap();
+        let target_atom = rustler::types::atom::Atom::from_str(env, "target").unwrap();
 
         if let Ok(list) = term.decode::<Vec<(rustler::Atom, Term<'_>)>>() {
             for (key, val) in list {
@@ -416,6 +498,10 @@ impl BundleOptions {
                     if let Ok(map) = val.decode::<HashMap<String, String>>() {
                         opts.define = map.into_iter().collect();
                     }
+                } else if key == import_source_atom {
+                    opts.import_source = val.decode::<String>().unwrap_or_default();
+                } else if key == target_atom {
+                    opts.target = val.decode::<String>().unwrap_or_default();
                 }
             }
         }
@@ -445,8 +531,13 @@ fn bundle<'a>(
     }
 
     // Transform each module and collect dependency info
-    let transform_options =
-        build_jsx_options(&opts.jsx_runtime, &opts.jsx_factory, &opts.jsx_fragment);
+    let transform_options = build_transform_options(
+        &opts.jsx_runtime,
+        &opts.jsx_factory,
+        &opts.jsx_fragment,
+        &opts.import_source,
+        &opts.target,
+    );
     let mut transformed: HashMap<String, String> = HashMap::new();
     let mut deps: HashMap<String, Vec<String>> = HashMap::new();
 
@@ -590,14 +681,7 @@ fn bundle<'a>(
     if let Some(ref map_json) = source_map {
         let result = Term::map_from_arrays(
             env,
-            &[
-                rustler::types::atom::Atom::from_str(env, "code")
-                    .unwrap()
-                    .encode(env),
-                rustler::types::atom::Atom::from_str(env, "sourcemap")
-                    .unwrap()
-                    .encode(env),
-            ],
+            &[atoms::code().encode(env), atoms::sourcemap().encode(env)],
             &[output.encode(env), map_json.encode(env)],
         )
         .unwrap();

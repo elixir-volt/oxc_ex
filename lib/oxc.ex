@@ -95,6 +95,10 @@ defmodule OXC do
     * `:jsx` — JSX runtime, `:automatic` (default) or `:classic`
     * `:jsx_factory` — function for classic JSX (default: `"React.createElement"`)
     * `:jsx_fragment` — fragment for classic JSX (default: `"React.Fragment"`)
+    * `:import_source` — JSX import source (e.g. `"vue"`, `"preact"`)
+    * `:target` — downlevel target (e.g. `"es2019"`, `"chrome80"`)
+    * `:sourcemap` — generate a source map (default: `false`). When `true`,
+      returns `%{code: String.t(), sourcemap: String.t()}` instead of a plain string.
 
   ## Examples
 
@@ -106,12 +110,26 @@ defmodule OXC do
       iex> js =~ "createElement"
       true
   """
-  @spec transform(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [String.t()]}
+  @spec transform(String.t(), String.t(), keyword()) ::
+          {:ok, String.t() | %{code: String.t(), sourcemap: String.t()}} | {:error, [String.t()]}
   def transform(source, filename, opts \\ []) do
     jsx_runtime = opts |> Keyword.get(:jsx, :automatic) |> Atom.to_string()
     jsx_factory = Keyword.get(opts, :jsx_factory, "")
     jsx_fragment = Keyword.get(opts, :jsx_fragment, "")
-    OXC.Native.transform(source, filename, jsx_runtime, jsx_factory, jsx_fragment)
+    import_source = Keyword.get(opts, :import_source, "")
+    target = Keyword.get(opts, :target, "")
+    sourcemap = Keyword.get(opts, :sourcemap, false)
+
+    OXC.Native.transform(
+      source,
+      filename,
+      jsx_runtime,
+      jsx_factory,
+      jsx_fragment,
+      import_source,
+      target,
+      sourcemap
+    )
   end
 
   @doc """
@@ -122,7 +140,8 @@ defmodule OXC do
       iex> OXC.transform!("const x: number = 42", "test.ts")
       "const x = 42;\\n"
   """
-  @spec transform!(String.t(), String.t(), keyword()) :: String.t()
+  @spec transform!(String.t(), String.t(), keyword()) ::
+          String.t() | %{code: String.t(), sourcemap: String.t()}
   def transform!(source, filename, opts \\ []) do
     case transform(source, filename, opts) do
       {:ok, code} -> code
@@ -172,6 +191,33 @@ defmodule OXC do
   end
 
   @doc """
+  Extract import specifiers from JavaScript/TypeScript source.
+
+  Faster than `parse/2` + `collect/2` — skips full AST serialization
+  and returns only the import source strings. Type-only imports
+  (`import type { ... }`) are excluded.
+
+  ## Examples
+
+      iex> {:ok, imports} = OXC.imports("import { ref } from 'vue'\\nimport type { Ref } from 'vue'", "test.ts")
+      iex> imports
+      ["vue"]
+  """
+  @spec imports(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, [String.t()]}
+  def imports(source, filename) do
+    OXC.Native.imports(source, filename)
+  end
+
+  @doc "Like `imports/2` but raises on errors."
+  @spec imports!(String.t(), String.t()) :: [String.t()]
+  def imports!(source, filename) do
+    case imports(source, filename) do
+      {:ok, list} -> list
+      {:error, errors} -> raise "OXC imports error: #{inspect(errors)}"
+    end
+  end
+
+  @doc """
   Bundle multiple TypeScript/JavaScript modules into a single IIFE script.
 
   Takes a list of `{filename, source}` tuples representing modules that import
@@ -197,6 +243,8 @@ defmodule OXC do
     * `:jsx` — JSX runtime, `:automatic` (default) or `:classic`
     * `:jsx_factory` — function for classic JSX (default: `"React.createElement"`)
     * `:jsx_fragment` — fragment for classic JSX (default: `"React.Fragment"`)
+    * `:import_source` — JSX import source (e.g. `"vue"`, `"preact"`)
+    * `:target` — downlevel target (e.g. `"es2019"`, `"chrome80"`)
 
   ## Examples
 

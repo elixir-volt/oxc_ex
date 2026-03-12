@@ -314,6 +314,14 @@ defmodule OXC.BundleTest do
     end
   end
 
+  describe "bundle/2 target option" do
+    test "downlevels with target" do
+      files = [{"a.js", "const x = a ?? b; (globalThis).x = x;"}]
+      {:ok, js} = OXC.bundle(files, target: "es2019")
+      refute js =~ "??"
+    end
+  end
+
   describe "bundle!/2" do
     test "returns result on success" do
       files = [{"a.ts", "const x: number = 1;"}]

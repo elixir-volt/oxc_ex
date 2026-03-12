@@ -251,6 +251,32 @@ defmodule OXCTest do
       {:ok, js} = OXC.transform("import type { Foo } from 'bar'", "test.ts")
       refute js =~ "import"
     end
+
+    test "returns sourcemap when requested" do
+      {:ok, result} = OXC.transform("const x: number = 42", "test.ts", sourcemap: true)
+      assert is_map(result)
+      assert result.code =~ "const x = 42"
+      assert is_binary(result.sourcemap)
+      assert {:ok, map} = Jason.decode(result.sourcemap)
+      assert map["version"] == 3
+    end
+
+    test "returns plain string without sourcemap" do
+      {:ok, js} = OXC.transform("const x: number = 42", "test.ts")
+      assert is_binary(js)
+      refute is_map(js)
+    end
+
+    test "downlevels with target" do
+      {:ok, js} = OXC.transform("const x = a ?? b", "test.js", target: "es2019")
+      refute js =~ "??"
+    end
+
+    test "transforms JSX with custom import source" do
+      {:ok, js} = OXC.transform("<div />", "test.jsx", import_source: "vue")
+      assert js =~ "vue/jsx-runtime"
+      refute js =~ "react/jsx-runtime"
+    end
   end
 
   describe "transform!/3" do
@@ -332,6 +358,33 @@ defmodule OXCTest do
       assert_raise RuntimeError, ~r/minify error/, fn ->
         OXC.minify!("const = ;", "bad.js")
       end
+    end
+  end
+
+  describe "imports/2" do
+    test "extracts import specifiers" do
+      {:ok, imports} =
+        OXC.imports("import { ref } from 'vue'\nimport { h } from 'vue'", "test.ts")
+
+      assert imports == ["vue", "vue"]
+    end
+
+    test "excludes type-only imports" do
+      {:ok, imports} =
+        OXC.imports("import type { Ref } from 'vue'\nimport { ref } from 'vue'", "test.ts")
+
+      assert imports == ["vue"]
+    end
+
+    test "handles no imports" do
+      {:ok, imports} = OXC.imports("const x = 1", "test.js")
+      assert imports == []
+    end
+
+    test "returns errors for invalid syntax" do
+      {:error, errors} = OXC.imports("const = ;", "bad.js")
+      assert is_list(errors)
+      assert length(errors) > 0
     end
   end
 

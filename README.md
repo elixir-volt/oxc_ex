@@ -11,13 +11,14 @@ Parse, transform, and minify JavaScript/TypeScript at native speed.
 - **Minify** with dead code elimination, constant folding, and variable mangling
 - **Bundle** multiple TS/JS modules into a single IIFE with dependency resolution
 - **Walk/Collect** helpers for AST traversal and node filtering
+- **Import extraction** — fast NIF-level import specifier extraction
 
 ## Installation
 
 ```elixir
 def deps do
   [
-    {:oxc, "~> 0.2.0"}
+    {:oxc, "~> 0.3.0"}
   ]
 end
 ```
@@ -60,6 +61,26 @@ Strip TypeScript types and transform JSX:
 # Uses React.createElement
 ```
 
+With source maps:
+
+```elixir
+{:ok, %{code: js, sourcemap: map}} = OXC.transform(code, "app.ts", sourcemap: true)
+```
+
+Target specific environments:
+
+```elixir
+{:ok, js} = OXC.transform("const x = a ?? b", "test.js", target: "es2019")
+# Nullish coalescing lowered to ternary
+```
+
+Custom JSX import source (Vue, Preact, etc.):
+
+```elixir
+{:ok, js} = OXC.transform("<div />", "app.jsx", import_source: "vue")
+# Imports from vue/jsx-runtime instead of react/jsx-runtime
+```
+
 ### Minify
 
 ```elixir
@@ -68,6 +89,22 @@ Strip TypeScript types and transform JSX:
 
 {:ok, min} = OXC.minify(code, "test.js", mangle: false)
 # Compress without renaming variables
+```
+
+### Import Extraction
+
+Fast NIF-level extraction of import specifiers — skips full AST serialization:
+
+```elixir
+{:ok, imports} = OXC.imports("import { ref } from 'vue'\nimport { h } from 'preact'", "test.ts")
+# ["vue", "preact"]
+```
+
+Type-only imports are excluded automatically:
+
+```elixir
+{:ok, imports} = OXC.imports("import type { Ref } from 'vue'\nimport { ref } from 'vue'", "test.ts")
+# ["vue"]
 ```
 
 ### Validate
@@ -131,6 +168,9 @@ Options:
 # Remove console.* calls
 {:ok, js} = OXC.bundle(files, minify: true, drop_console: true)
 
+# Target-specific downleveling
+{:ok, js} = OXC.bundle(files, target: "es2020")
+
 # Banner and footer
 {:ok, js} = OXC.bundle(files, banner: "/* MIT */", footer: "/* v1.0 */")
 ```
@@ -143,6 +183,7 @@ All functions have bang variants that raise on error:
 ast = OXC.parse!("const x = 1", "test.js")
 js = OXC.transform!("const x: number = 42", "test.ts")
 min = OXC.minify!("const x = 1 + 2;", "test.js")
+imports = OXC.imports!("import { ref } from 'vue'", "test.ts")
 ```
 
 ## How It Works

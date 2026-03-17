@@ -625,7 +625,7 @@ fn bundle<'a>(
     let mut source_map: Option<String> = None;
     if opts.minify {
         let allocator = Allocator::default();
-        let source_type = SourceType::default();
+        let source_type = SourceType::script();
         let ret = Parser::new(&allocator, &output, source_type)
             .with_options(ParseOptions {
                 parse_regular_expression: true,

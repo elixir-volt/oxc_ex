@@ -1,8 +1,12 @@
 # Changelog
 
+## 0.5.3
+
+- Fix `export { local as default }` producing `var default = local` (syntax error). The bundler's alias emitter now uses `_default` for the reserved word `default`.
+
 ## 0.5.2
 
-- Fix `default` keyword rejected as property name when minifying bundled IIFE output. The minifier was re-parsing in ESM module mode (`SourceType::mjs`) instead of script mode — `{ default: value }` and `obj.default` are valid JavaScript but were rejected as reserved words in module context.
+- (yanked — fix was incomplete)
 
 ## 0.5.1
 

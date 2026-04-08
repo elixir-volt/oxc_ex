@@ -297,6 +297,30 @@ defmodule OXC.BundleTest do
       {:ok, js} = OXC.bundle(files, entry: "a.js", target: "es2019")
       refute js =~ "??"
     end
+
+    test "format :esm produces ES module output" do
+      files = [
+        {"util.ts", "export const x: number = 1;"},
+        {"main.ts", "import { x } from './util'\nexport const y = x + 1;"}
+      ]
+
+      {:ok, js} = OXC.bundle(files, entry: "main.ts", format: :esm)
+      assert js =~ "export"
+      refute js =~ "(function"
+    end
+
+    test "format :cjs produces CommonJS output" do
+      files = [{"main.ts", "export const x: number = 1;"}]
+      {:ok, js} = OXC.bundle(files, entry: "main.ts", format: :cjs)
+      assert js =~ "exports"
+      refute js =~ "(function"
+    end
+
+    test "format defaults to :iife" do
+      files = [{"main.ts", "const x = 1;"}]
+      {:ok, js} = OXC.bundle(files, entry: "main.ts")
+      assert js =~ "(function"
+    end
   end
 
   describe "bundle/2 sourcemaps" do

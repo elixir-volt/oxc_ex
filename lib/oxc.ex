@@ -218,6 +218,7 @@ defmodule OXC do
 
     * `:entry` — entry module filename from `files` (required), for example
       `"main.ts"`
+    * `:format` — output format: `:iife` (default), `:esm`, or `:cjs`
     * `:minify` — minify the output (default: `false`)
     * `:banner` — string to prepend before the IIFE (e.g. `"/* v1.0 */"`)
     * `:footer` — string to append after the IIFE
@@ -286,6 +287,7 @@ defmodule OXC do
   defp normalize_bundle_options(opts) do
     %{
       "entry" => Keyword.get(opts, :entry, ""),
+      "format" => opts |> Keyword.get(:format, :iife) |> Atom.to_string(),
       "minify" => Keyword.get(opts, :minify, false),
       "banner" => Keyword.get(opts, :banner),
       "footer" => Keyword.get(opts, :footer),

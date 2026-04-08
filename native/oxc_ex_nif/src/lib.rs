@@ -305,10 +305,16 @@ fn default_jsx_runtime() -> String {
     "automatic".to_string()
 }
 
+fn default_format() -> String {
+    "iife".to_string()
+}
+
 #[derive(Default, Deserialize)]
 #[serde(default)]
 struct BundleOptions {
     entry: String,
+    #[serde(default = "default_format")]
+    format: String,
     minify: bool,
     banner: Option<String>,
     footer: Option<String>,
@@ -543,7 +549,11 @@ fn build_bundle_options(
         cwd: Some(cwd.to_path_buf()),
         external: (!external_specifiers.is_empty()).then(|| IsExternal::from(external_specifiers)),
         file: Some("bundle.js".to_string()),
-        format: Some(OutputFormat::Iife),
+        format: Some(match opts.format.as_str() {
+            "esm" => OutputFormat::Esm,
+            "cjs" => OutputFormat::Cjs,
+            _ => OutputFormat::Iife,
+        }),
         sourcemap: opts.sourcemap.then_some(SourceMapType::Hidden),
         banner: opts
             .banner

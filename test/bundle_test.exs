@@ -172,19 +172,19 @@ defmodule OXC.BundleTest do
     end
 
     test "requires at least one file" do
-      assert {:error, [message]} = OXC.bundle([], entry: "main.ts")
+      assert {:error, [%{message: message}]} = OXC.bundle([], entry: "main.ts")
       assert message =~ "at least one file"
     end
 
     test "requires entry" do
       files = [{"a.ts", "export const x = 1;"}]
-      assert {:error, [message]} = OXC.bundle(files)
+      assert {:error, [%{message: message}]} = OXC.bundle(files)
       assert message =~ ":entry"
     end
 
     test "requires entry to exist in files" do
       files = [{"a.ts", "export const x = 1;"}]
-      assert {:error, [message]} = OXC.bundle(files, entry: "missing.ts")
+      assert {:error, [%{message: message}]} = OXC.bundle(files, entry: "missing.ts")
       assert message =~ "was not found"
     end
 
@@ -401,7 +401,7 @@ defmodule OXC.BundleTest do
     end
 
     test "raises on errors" do
-      assert_raise RuntimeError, ~r/bundle error/, fn ->
+      assert_raise OXC.Error, ~r/bundle error/, fn ->
         OXC.bundle!([{"bad.ts", "const = ;"}], entry: "bad.ts")
       end
     end

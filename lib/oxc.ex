@@ -19,12 +19,19 @@ defmodule OXC do
   (e.g. `:import_declaration`, `:variable_declaration`).
   """
 
-  @type ast :: map()
+  defmodule Error do
+    defexception [:message, :errors]
+
+    @impl true
+    def message(%{message: message}), do: message
+  end
+
+  @type ast :: %{required(:type) => atom(), optional(atom()) => any()}
   @type error :: %{message: String.t()}
   @type code_with_sourcemap :: %{code: String.t(), sourcemap: String.t()}
   @type parse_result :: {:ok, ast()} | {:error, [error()]}
-  @type transform_result :: {:ok, String.t() | code_with_sourcemap()} | {:error, [String.t()]}
-  @type bundle_result :: {:ok, String.t() | code_with_sourcemap()} | {:error, [String.t()]}
+  @type transform_result :: {:ok, String.t() | code_with_sourcemap()} | {:error, [error()]}
+  @type bundle_result :: {:ok, String.t() | code_with_sourcemap()} | {:error, [error()]}
 
   @doc """
   Parse JavaScript or TypeScript source code into an ESTree AST.
@@ -69,8 +76,11 @@ defmodule OXC do
   @spec parse!(String.t(), String.t()) :: ast()
   def parse!(source, filename) do
     case parse(source, filename) do
-      {:ok, ast} -> ast
-      {:error, errors} -> raise "OXC parse error: #{inspect(errors)}"
+      {:ok, ast} ->
+        ast
+
+      {:error, errors} ->
+        raise Error, message: "OXC parse error: #{inspect(errors)}", errors: errors
     end
   end
 
@@ -122,7 +132,7 @@ defmodule OXC do
   def transform(source, filename, opts \\ []) do
     case OXC.Native.transform(source, filename, normalize_transform_options(opts)) do
       {:ok, result} -> {:ok, normalize_native_result(result)}
-      {:error, errors} -> {:error, errors}
+      {:error, errors} -> {:error, atomize_term_keys(errors)}
     end
   end
 
@@ -137,8 +147,11 @@ defmodule OXC do
   @spec transform!(String.t(), String.t(), keyword()) :: String.t() | code_with_sourcemap()
   def transform!(source, filename, opts \\ []) do
     case transform(source, filename, opts) do
-      {:ok, code} -> code
-      {:error, errors} -> raise "OXC transform error: #{inspect(errors)}"
+      {:ok, code} ->
+        code
+
+      {:error, errors} ->
+        raise Error, message: "OXC transform error: #{inspect(errors)}", errors: errors
     end
   end
 
@@ -160,9 +173,12 @@ defmodule OXC do
       iex> min =~ "x()"
       false
   """
-  @spec minify(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [String.t()]}
+  @spec minify(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [error()]}
   def minify(source, filename, opts \\ []) do
-    OXC.Native.minify(source, filename, normalize_minify_options(opts))
+    case OXC.Native.minify(source, filename, normalize_minify_options(opts)) do
+      {:ok, code} -> {:ok, code}
+      {:error, errors} -> {:error, atomize_term_keys(errors)}
+    end
   end
 
   @doc """
@@ -177,8 +193,11 @@ defmodule OXC do
   @spec minify!(String.t(), String.t(), keyword()) :: String.t()
   def minify!(source, filename, opts \\ []) do
     case minify(source, filename, opts) do
-      {:ok, code} -> code
-      {:error, errors} -> raise "OXC minify error: #{inspect(errors)}"
+      {:ok, code} ->
+        code
+
+      {:error, errors} ->
+        raise Error, message: "OXC minify error: #{inspect(errors)}", errors: errors
     end
   end
 
@@ -195,17 +214,23 @@ defmodule OXC do
       iex> imports
       ["vue"]
   """
-  @spec imports(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, [String.t()]}
+  @spec imports(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, [error()]}
   def imports(source, filename) do
-    OXC.Native.imports(source, filename)
+    case OXC.Native.imports(source, filename) do
+      {:ok, list} -> {:ok, list}
+      {:error, errors} -> {:error, atomize_term_keys(errors)}
+    end
   end
 
   @doc "Like `imports/2` but raises on errors."
   @spec imports!(String.t(), String.t()) :: [String.t()]
   def imports!(source, filename) do
     case imports(source, filename) do
-      {:ok, list} -> list
-      {:error, errors} -> raise "OXC imports error: #{inspect(errors)}"
+      {:ok, list} ->
+        list
+
+      {:error, errors} ->
+        raise Error, message: "OXC imports error: #{inspect(errors)}", errors: errors
     end
   end
 
@@ -244,17 +269,23 @@ defmodule OXC do
                end: non_neg_integer()
              }
            ]}
-          | {:error, [String.t()]}
+          | {:error, [error()]}
   def collect_imports(source, filename) do
-    OXC.Native.collect_imports(source, filename)
+    case OXC.Native.collect_imports(source, filename) do
+      {:ok, list} -> {:ok, list}
+      {:error, errors} -> {:error, atomize_term_keys(errors)}
+    end
   end
 
   @doc "Like `collect_imports/2` but raises on errors."
   @spec collect_imports!(String.t(), String.t()) :: [map()]
   def collect_imports!(source, filename) do
     case collect_imports(source, filename) do
-      {:ok, list} -> list
-      {:error, errors} -> raise "OXC collect_imports error: #{inspect(errors)}"
+      {:ok, list} ->
+        list
+
+      {:error, errors} ->
+        raise Error, message: "OXC collect_imports error: #{inspect(errors)}", errors: errors
     end
   end
 
@@ -282,7 +313,7 @@ defmodule OXC do
       "import { ref } from '/@vendor/vue.js'\\nimport a from './utils'"
   """
   @spec rewrite_specifiers(String.t(), String.t(), (String.t() -> {:rewrite, String.t()} | :keep)) ::
-          {:ok, String.t()} | {:error, [String.t()]}
+          {:ok, String.t()} | {:error, [error()]}
   def rewrite_specifiers(source, filename, fun) when is_function(fun, 1) do
     case collect_imports(source, filename) do
       {:ok, imports} ->
@@ -308,8 +339,11 @@ defmodule OXC do
           String.t()
   def rewrite_specifiers!(source, filename, fun) do
     case rewrite_specifiers(source, filename, fun) do
-      {:ok, result} -> result
-      {:error, errors} -> raise "OXC rewrite_specifiers error: #{inspect(errors)}"
+      {:ok, result} ->
+        result
+
+      {:error, errors} ->
+        raise Error, message: "OXC rewrite_specifiers error: #{inspect(errors)}", errors: errors
     end
   end
 
@@ -326,6 +360,7 @@ defmodule OXC do
       `"main.ts"`
     * `:format` — output format: `:iife` (default), `:esm`, or `:cjs`
     * `:minify` — minify the output (default: `false`)
+    * `:treeshake` — enable tree-shaking to remove unused exports (default: `false`)
     * `:banner` — string to prepend before the IIFE (e.g. `"/* v1.0 */"`)
     * `:footer` — string to append after the IIFE
     * `:preamble` — code to inject at the top of the IIFE function body,
@@ -357,11 +392,11 @@ defmodule OXC do
   @spec bundle([{String.t(), String.t()}], keyword()) :: bundle_result()
   def bundle(files, opts \\ []) do
     if Keyword.get(opts, :entry, "") == "" do
-      {:error, ["bundle/2 requires :entry, for example: entry: \"main.ts\""]}
+      {:error, [%{message: "bundle/2 requires :entry, for example: entry: \"main.ts\""}]}
     else
       case OXC.Native.bundle(files, normalize_bundle_options(opts)) do
         {:ok, result} -> {:ok, normalize_native_result(result)}
-        {:error, errors} -> {:error, errors}
+        {:error, errors} -> {:error, atomize_term_keys(errors)}
       end
     end
   end
@@ -372,8 +407,11 @@ defmodule OXC do
   @spec bundle!([{String.t(), String.t()}], keyword()) :: String.t() | code_with_sourcemap()
   def bundle!(files, opts \\ []) do
     case bundle(files, opts) do
-      {:ok, result} -> result
-      {:error, errors} -> raise "OXC bundle error: #{inspect(errors)}"
+      {:ok, result} ->
+        result
+
+      {:error, errors} ->
+        raise Error, message: "OXC bundle error: #{inspect(errors)}", errors: errors
     end
   end
 
@@ -397,6 +435,7 @@ defmodule OXC do
       "entry" => Keyword.get(opts, :entry, ""),
       "format" => opts |> Keyword.get(:format, :iife) |> Atom.to_string(),
       "minify" => Keyword.get(opts, :minify, false),
+      "treeshake" => Keyword.get(opts, :treeshake, false),
       "banner" => Keyword.get(opts, :banner),
       "footer" => Keyword.get(opts, :footer),
       "preamble" => Keyword.get(opts, :preamble),
@@ -418,6 +457,10 @@ defmodule OXC do
   defp normalize_native_result(result) when is_map(result), do: atomize_term_keys(result)
   defp normalize_native_result(result), do: result
 
+  # Safe to use String.to_atom/1 here: ESTree has a fixed, bounded set of
+  # property names and node types. Untrusted user input (JS source code)
+  # only affects string *values*, not map keys — those come from OXC's
+  # serializer which emits a known set of ESTree field names.
   defp atomize_term_keys(map) when is_map(map) do
     Map.new(map, fn {key, value} ->
       atom_key = if is_binary(key), do: String.to_atom(key), else: key
@@ -433,17 +476,17 @@ defmodule OXC do
   defp atomize_value(_key, value), do: atomize_term_keys(value)
 
   defp to_snake_atom(value) do
-    value
-    |> String.replace(~r/([A-Z]+)([A-Z][a-z])/, "\\1_\\2")
-    |> String.replace(~r/([a-z0-9])([A-Z])/, "\\1_\\2")
-    |> String.downcase()
-    |> String.to_atom()
+    value |> Macro.underscore() |> String.to_atom()
   end
 
   # ── AST Traversal ──
 
   @doc """
   Walk an AST tree, calling `fun` on every node (any map with a `:type` key).
+
+  Descends into all map values and list elements to reach nested AST
+  nodes, including maps without a `:type` key (which are skipped for
+  the callback but still traversed).
 
   ## Examples
 
@@ -456,11 +499,11 @@ defmodule OXC do
       "x"
   """
   @spec walk(ast() | [ast()], (map() -> any())) :: :ok
-  def walk(nodes, fun) when is_list(nodes) do
+  def walk(nodes, fun) when is_list(nodes) and is_function(fun, 1) do
     Enum.each(nodes, &walk(&1, fun))
   end
 
-  def walk(node, fun) when is_map(node) do
+  def walk(node, fun) when is_map(node) and is_function(fun, 1) do
     if Map.has_key?(node, :type), do: fun.(node)
 
     node

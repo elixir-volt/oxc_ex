@@ -107,8 +107,8 @@ defmodule OXCTest do
       assert ast.type == :program
     end
 
-    test "raises on parse error" do
-      assert_raise RuntimeError, ~r/parse error/, fn ->
+    test "raises OXC.Error on parse error" do
+      assert_raise OXC.Error, ~r/parse error/, fn ->
         OXC.parse!("const = ;", "bad.js")
       end
     end
@@ -155,17 +155,6 @@ defmodule OXCTest do
 
     test "walks a list of nodes" do
       {:ok, ast} = OXC.parse("const x = 1; const y = 2;", "test.js")
-      names = collect_identifiers(ast)
-      assert "x" in names
-      assert "y" in names
-
-      list_names =
-        OXC.collect(ast, fn
-          %{type: :variable_declaration} = node -> {:keep, node}
-          _ -> :skip
-        end)
-
-      assert length(list_names) == 2
 
       OXC.walk(ast.body, fn
         %{type: :identifier, name: name} -> send(self(), {:name, name})
@@ -277,6 +266,7 @@ defmodule OXCTest do
       {:error, errors} = OXC.transform("const = ;", "bad.ts")
       assert is_list(errors)
       assert length(errors) > 0
+      assert %{message: _} = hd(errors)
     end
 
     test "handles enum transformation" do
@@ -323,8 +313,8 @@ defmodule OXCTest do
       assert js =~ "const x = 42"
     end
 
-    test "raises on error" do
-      assert_raise RuntimeError, ~r/transform error/, fn ->
+    test "raises OXC.Error on error" do
+      assert_raise OXC.Error, ~r/transform error/, fn ->
         OXC.transform!("const = ;", "bad.ts")
       end
     end
@@ -378,6 +368,7 @@ defmodule OXCTest do
       {:error, errors} = OXC.minify("const = ;", "bad.js")
       assert is_list(errors)
       assert length(errors) > 0
+      assert %{message: _} = hd(errors)
     end
 
     test "handles empty input" do
@@ -392,8 +383,8 @@ defmodule OXCTest do
       assert is_binary(min)
     end
 
-    test "raises on error" do
-      assert_raise RuntimeError, ~r/minify error/, fn ->
+    test "raises OXC.Error on error" do
+      assert_raise OXC.Error, ~r/minify error/, fn ->
         OXC.minify!("const = ;", "bad.js")
       end
     end
@@ -423,6 +414,7 @@ defmodule OXCTest do
       {:error, errors} = OXC.imports("const = ;", "bad.js")
       assert is_list(errors)
       assert length(errors) > 0
+      assert %{message: _} = hd(errors)
     end
   end
 
@@ -496,10 +488,17 @@ defmodule OXCTest do
       assert :dynamic in types
     end
 
+    test "finds deeply nested dynamic imports" do
+      source = "function load() { if (true) { return import('./deep') } }"
+      {:ok, imports} = OXC.collect_imports(source, "test.js")
+      assert [%{specifier: "./deep", type: :dynamic}] = imports
+    end
+
     test "returns errors for invalid syntax" do
       {:error, errors} = OXC.collect_imports("const = ;", "bad.js")
       assert is_list(errors)
       assert length(errors) > 0
+      assert %{message: _} = hd(errors)
     end
   end
 

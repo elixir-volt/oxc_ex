@@ -1,7 +1,7 @@
 defmodule OXC.MixProject do
   use Mix.Project
 
-  @version "0.6.2"
+  @version "0.7.0"
   @source_url "https://github.com/elixir-volt/oxc_ex"
 
   def project do
@@ -70,7 +70,7 @@ defmodule OXC.MixProject do
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:ex_dna, "~> 1.1", only: [:dev, :test], runtime: false},
+      {:ex_dna, "~> 1.3", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.2", only: [:dev, :test], runtime: false}
     ]
   end

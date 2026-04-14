@@ -25,6 +25,7 @@
 
 - `collect/2` uses a recursive accumulator instead of creating an ETS table per call.
 - `to_snake_atom` uses `Macro.underscore/1` instead of hand-rolled regex.
+- `ImportInfo` uses `#[derive(NifMap)]` instead of a manual `Encoder` impl.
 - `@type ast` tightened to `%{required(:type) => atom(), optional(atom()) => any()}`.
 - `patch_string/2` deduplication behavior is now documented.
 - Rust NIF split from a single 800-line `lib.rs` into `parse.rs`, `imports.rs`, `bundle.rs`, `options.rs`, `error.rs`.

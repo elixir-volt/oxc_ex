@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.2
+
+### Added
+
+- `OXC.transform_many/2` — transform multiple files in parallel via a Rust rayon thread pool. Single NIF call, no BEAM scheduling overhead. 6.8x faster than sequential `transform/3` on 2000 files.
+
 ## 0.7.1
 
 ### Fixed

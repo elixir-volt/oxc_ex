@@ -511,6 +511,113 @@ defmodule OXC do
 
   # ── AST Traversal ──
 
+  # ── Codegen ──
+
+  @doc """
+  Generate JavaScript source code from an AST map.
+
+  Takes an ESTree AST (as returned by `parse/2` or constructed manually)
+  and produces formatted JavaScript source code using OXC's code generator.
+
+  Handles operator precedence, indentation, and semicolon insertion.
+
+  ## Examples
+
+      iex> ast = OXC.parse!("const x = 1 + 2", "test.js")
+      iex> {:ok, js} = OXC.codegen(ast)
+      iex> js =~ "const x = 1 + 2"
+      true
+
+      iex> ast = %{type: :program, body: [
+      ...>   %{type: :variable_declaration, kind: :const, declarations: [
+      ...>     %{type: :variable_declarator,
+      ...>       id: %{type: :identifier, name: "x"},
+      ...>       init: %{type: :literal, value: 42}}
+      ...>   ]}
+      ...> ]}
+      iex> {:ok, js} = OXC.codegen(ast)
+      iex> js =~ "const x = 42"
+      true
+  """
+  @spec codegen(ast()) :: {:ok, String.t()} | {:error, [error()]}
+  def codegen(ast) do
+    case OXC.Native.codegen(deatomize_ast(ast)) do
+      {:ok, code} -> {:ok, code}
+      {:error, errors} -> {:error, atomize_term_keys(errors)}
+    end
+  end
+
+  @doc """
+  Like `codegen/1` but raises on errors.
+  """
+  @spec codegen!(ast()) :: String.t()
+  def codegen!(ast) do
+    case codegen(ast) do
+      {:ok, code} -> code
+      {:error, errors} -> raise Error, message: "OXC codegen error: #{inspect(errors)}", errors: errors
+    end
+  end
+
+  @doc """
+  Substitute `$placeholders` in an AST with provided values.
+
+  Walks the AST and replaces any identifier node whose name starts with `$`
+  with the corresponding value from `bindings`.
+
+  Binding values can be:
+    * A string — replaced as an identifier name
+    * `{:literal, value}` — replaced with a literal node
+    * A map with `:type` — spliced as a raw AST node
+
+  ## Examples
+
+      iex> {:ok, ast} = OXC.parse("const x = $value", "t.js")
+      iex> ast = OXC.bind(ast, value: {:literal, 42})
+      iex> OXC.codegen!(ast) =~ "const x = 42"
+      true
+
+      iex> {:ok, ast} = OXC.parse("const $name = 1", "t.js")
+      iex> ast = OXC.bind(ast, name: "myVar")
+      iex> OXC.codegen!(ast) =~ "const myVar = 1"
+      true
+  """
+  @spec bind(ast(), keyword()) :: ast()
+  def bind(ast, bindings) when is_list(bindings) do
+    lookup = Map.new(bindings, fn {k, v} -> {"$#{k}", v} end)
+
+    postwalk(ast, fn
+      %{type: :identifier, name: "$" <> _ = name} = node ->
+        case Map.get(lookup, name) do
+          nil -> node
+          value when is_binary(value) -> %{node | name: value}
+          {:literal, lit} -> %{type: :literal, value: lit}
+          %{type: _} = ast_node -> ast_node
+        end
+
+      node ->
+        node
+    end)
+  end
+
+  # Convert atom keys/values back to strings for the Rust NIF
+  defp deatomize_ast(map) when is_map(map) do
+    Map.new(map, fn {key, value} ->
+      str_key = if is_atom(key), do: deatomize_key(key), else: key
+      {str_key, deatomize_value(key, value)}
+    end)
+  end
+
+  defp deatomize_ast(list) when is_list(list), do: Enum.map(list, &deatomize_ast/1)
+  defp deatomize_ast(value), do: value
+
+  defp deatomize_key(:super_class), do: :superClass
+  defp deatomize_key(key), do: key
+
+  defp deatomize_value(:type, value) when is_atom(value), do: value
+  defp deatomize_value(:kind, value) when is_atom(value), do: value
+  defp deatomize_value(_key, value), do: deatomize_ast(value)
+
+
   @doc """
   Walk an AST tree, calling `fun` on every node (any map with a `:type` key).
 

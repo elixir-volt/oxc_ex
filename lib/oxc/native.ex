@@ -45,4 +45,7 @@ defmodule OXC.Native do
 
   @spec transform_many([{String.t(), String.t()}], map()) :: list()
   def transform_many(_inputs, _opts), do: :erlang.nif_error(:nif_not_loaded)
+
+  @spec codegen(map()) :: {:ok, String.t()} | {:error, list()}
+  def codegen(_ast), do: :erlang.nif_error(:nif_not_loaded)
 end

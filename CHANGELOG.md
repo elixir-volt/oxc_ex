@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.0
+
+### Added
+
+- `OXC.Lint.run/3` — lint JS/TS source with oxlint's 650+ built-in rules via a Rust NIF. Supports all oxlint plugins (react, typescript, unicorn, import, jsdoc, jest, vitest, jsx-a11y, nextjs, promise, node, vue) and configurable rule severities.
+- `OXC.Lint.Rule` behaviour — write custom lint rules in Elixir that operate on the parsed ESTree AST. Rules use `OXC.walk/2`, `OXC.collect/2`, or `OXC.postwalk/3` for traversal and return diagnostics with spans.
+- Built-in and custom rules run together in a single `OXC.Lint.run/3` call.
+
 ## 0.7.2
 
 ### Added

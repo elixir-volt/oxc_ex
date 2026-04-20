@@ -82,9 +82,8 @@ impl TransformOutput {
                 }),
             )
                 .encode(env),
-            TransformOutput::Error(errors) => {
-                crate::error::error_to_term(env, errors).unwrap_or_else(|_| atoms::error().encode(env))
-            }
+            TransformOutput::Error(errors) => crate::error::error_to_term(env, errors)
+                .unwrap_or_else(|_| atoms::error().encode(env)),
         }
     }
 }
@@ -163,10 +162,7 @@ pub fn parse<'a>(env: Env<'a>, source: &str, filename: &str) -> NifResult<Term<'
     let json: Value = match deserializer.into_iter().next() {
         Some(Ok(v)) => v,
         Some(Err(e)) => {
-            return error_to_term(
-                env,
-                &[format!("Failed to deserialize ESTree JSON: {e}")],
-            )
+            return error_to_term(env, &[format!("Failed to deserialize ESTree JSON: {e}")])
         }
         None => return error_to_term(env, &["Empty ESTree JSON output".to_string()]),
     };

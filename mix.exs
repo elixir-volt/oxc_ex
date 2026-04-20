@@ -1,7 +1,7 @@
 defmodule OXC.MixProject do
   use Mix.Project
 
-  @version "0.7.2"
+  @version "0.8.0"
   @source_url "https://github.com/elixir-volt/oxc_ex"
 
   def project do
@@ -37,7 +37,7 @@ defmodule OXC.MixProject do
         "OXC" => "https://oxc.rs"
       },
       files:
-        ~w(lib native/oxc_ex_nif/src native/oxc_ex_nif/Cargo.toml Cargo.toml Cargo.lock .formatter.exs mix.exs README.md LICENSE checksum-*.exs)
+        ~w(lib native/oxc_ex_nif/src native/oxc_ex_nif/Cargo.toml native/oxc_lint_nif/src native/oxc_lint_nif/Cargo.toml native/oxc_lint_nif/Cargo.lock Cargo.toml Cargo.lock .formatter.exs mix.exs README.md LICENSE checksum-*.exs)
     ]
   end
 

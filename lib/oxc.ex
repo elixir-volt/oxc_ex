@@ -566,7 +566,10 @@ defmodule OXC do
 
   Binding values can be:
     * A string — replaced as an identifier name
-    * `{:literal, value}` — replaced with a literal node
+    * `{:literal, value}` — replaced with a literal node (string, number,
+      boolean, nil, map, or list — maps and lists are converted recursively
+      into JS object/array expressions)
+    * `{:expr, code}` — parsed as a JavaScript expression
     * A map with `:type` — spliced as a raw AST node
 
   ## Examples
@@ -583,20 +586,171 @@ defmodule OXC do
   """
   @spec bind(ast(), keyword()) :: ast()
   def bind(ast, bindings) when is_list(bindings) do
-    lookup = Map.new(bindings, fn {k, v} -> {"$#{k}", v} end)
+    lookup = Map.new(bindings, fn {k, v} -> {"$#{k}", resolve_binding(v)} end)
 
     postwalk(ast, fn
       %{type: :identifier, name: "$" <> _ = name} = node ->
         case Map.get(lookup, name) do
           nil -> node
-          value when is_binary(value) -> %{node | name: value}
-          {:literal, lit} -> %{type: :literal, value: lit}
-          %{type: _} = ast_node -> ast_node
+          {:rename, new_name} -> %{node | name: new_name}
+          {:node, ast_node} -> ast_node
         end
 
       node ->
         node
     end)
+  end
+
+  defp resolve_binding(value) when is_binary(value), do: {:rename, value}
+  defp resolve_binding({:literal, lit}), do: {:node, literal_to_ast(lit)}
+  defp resolve_binding({:expr, code}) when is_binary(code), do: {:node, parse_expression!(code)}
+  defp resolve_binding(%{type: _} = node), do: {:node, node}
+
+  @doc """
+  Replace `$placeholder` statements, properties, or elements with a list of nodes.
+
+  Finds expression statements, shorthand object properties, or array elements
+  whose identifier name starts with `$` and replaces them with the provided
+  nodes. Accepts a single item or a list. Strings are auto-parsed as JS.
+
+  ## Examples
+
+      iex> {:ok, ast} = OXC.parse("function f() { $body }", "t.js")
+      iex> ast = OXC.splice(ast, :body, ["const x = 1;", "return x;"])
+      iex> js = OXC.codegen!(ast)
+      iex> js =~ "const x = 1" and js =~ "return x"
+      true
+
+      iex> {:ok, ast} = OXC.parse("const obj = {a: 1, $rest}", "t.js")
+      iex> ast = OXC.splice(ast, :rest, ["b: 2", "c: 3"])
+      iex> js = OXC.codegen!(ast)
+      iex> js =~ "b: 2" and js =~ "c: 3"
+      true
+  """
+  @spec splice(ast(), atom(), ast() | String.t() | [ast() | String.t()]) :: ast()
+  def splice(ast, name, replacement) when is_atom(name) do
+    placeholder = "$#{name}"
+    items = List.wrap(replacement)
+
+    postwalk(ast, fn
+      %{type: :program, body: body} = node ->
+        %{node | body: splice_statements(body, placeholder, items)}
+
+      %{type: :block_statement, body: body} = node ->
+        %{node | body: splice_statements(body, placeholder, items)}
+
+      %{type: :object_expression, properties: props} = node ->
+        %{node | properties: splice_properties(props, placeholder, items)}
+
+      %{type: :array_expression, elements: elems} = node ->
+        %{node | elements: splice_elements(elems, placeholder, items)}
+
+      %{type: type, body: body} = node when type in [:function_body, :class_body] ->
+        %{node | body: splice_statements(body, placeholder, items)}
+
+      node ->
+        node
+    end)
+  end
+
+  defp splice_statements(stmts, placeholder, items) do
+    Enum.flat_map(stmts, fn
+      %{type: :expression_statement, expression: %{type: :identifier, name: ^placeholder}} ->
+        Enum.map(items, &resolve_splice_statement/1)
+
+      other ->
+        [other]
+    end)
+  end
+
+  defp splice_properties(props, placeholder, items) do
+    Enum.flat_map(props, fn
+      %{type: :property, shorthand: true, key: %{type: :identifier, name: ^placeholder}} ->
+        Enum.map(items, &resolve_splice_property/1)
+
+      other ->
+        [other]
+    end)
+  end
+
+  defp splice_elements(elems, placeholder, items) do
+    Enum.flat_map(elems, fn
+      %{type: :identifier, name: ^placeholder} ->
+        Enum.map(items, &resolve_splice_element/1)
+
+      other ->
+        [other]
+    end)
+  end
+
+  defp resolve_splice_statement(item) when is_binary(item) do
+    case parse(item, "splice.js") do
+      {:ok, %{body: [stmt]}} ->
+        stmt
+
+      _ ->
+        %{body: [%{body: %{body: [stmt]}}]} = parse!("function _(){" <> item <> "}", "splice.js")
+        stmt
+    end
+  end
+
+  defp resolve_splice_statement(%{type: _} = node), do: node
+
+  defp resolve_splice_property(item) when is_binary(item) do
+    ast = parse!("({" <> item <> "})", "splice.js")
+    [%{type: :expression_statement, expression: expr}] = ast.body
+    props = case expr do
+      %{type: :parenthesized_expression, expression: %{properties: p}} -> p
+      %{type: :object_expression, properties: p} -> p
+      %{properties: p} -> p
+    end
+    [prop] = props
+    prop
+
+  end
+
+  defp resolve_splice_property(%{type: _} = node), do: node
+
+  defp resolve_splice_element(item) when is_binary(item) do
+    parse_expression!(item)
+  end
+
+  defp resolve_splice_element(%{type: _} = node), do: node
+
+  defp parse_expression!(code) do
+    ast = parse!(code, "expr.js")
+
+    case ast.body do
+      [%{type: :expression_statement, expression: expr}] -> expr
+      _ -> raise Error, message: "Expected a single expression: #{code}", errors: []
+    end
+  end
+
+  defp literal_to_ast(value) when is_binary(value), do: %{type: :literal, value: value}
+  defp literal_to_ast(value) when is_number(value), do: %{type: :literal, value: value}
+  defp literal_to_ast(value) when is_boolean(value), do: %{type: :literal, value: value}
+  defp literal_to_ast(nil), do: %{type: :literal, value: nil}
+
+  defp literal_to_ast(map) when is_map(map) do
+    %{
+      type: :object_expression,
+      properties:
+        Enum.map(map, fn {k, v} ->
+          %{
+            type: :property,
+            key: %{type: :identifier, name: to_string(k)},
+            value: literal_to_ast(v),
+            kind: :init,
+            shorthand: false,
+            computed: false,
+            method: false
+          }
+        end)
+    }
+  end
+
+  defp literal_to_ast(list) when is_list(list) do
+    %{type: :array_expression, elements: Enum.map(list, &literal_to_ast/1)}
   end
 
   # Convert atom keys/values back to strings for the Rust NIF

@@ -2,13 +2,16 @@
 
 Elixir bindings for the [OXC](https://oxc.rs) JavaScript toolchain via Rust NIFs.
 
-Parse, transform, and minify JavaScript/TypeScript at native speed.
+Parse, transform, minify, lint, and generate JavaScript/TypeScript at native speed.
 
 ## Features
 
 - **Parse** JS/TS/JSX/TSX into ESTree AST (maps with atom keys, snake_case types)
+- **Codegen** — serialize AST maps back to JavaScript source via OXC's code generator
+- **Bind** — substitute `$placeholders` in parsed AST (quasiquoting for JS)
 - **Transform** TypeScript → JavaScript, JSX → `createElement`/`jsx` calls
 - **Minify** with dead code elimination, constant folding, and variable mangling
+- **Lint** with 650+ built-in oxlint rules + custom Elixir rules
 - **Bundle** multiple TS/JS modules into a single IIFE with dependency resolution
 - **Rewrite specifiers** — rewrite import/export paths in a single pass
 - **Collect imports** — typed import analysis (static/dynamic, import/export/export_all)
@@ -22,7 +25,7 @@ Parse, transform, and minify JavaScript/TypeScript at native speed.
 ```elixir
 def deps do
   [
-    {:oxc, "~> 0.7.0"}
+    {:oxc, "~> 0.8.0"}
   ]
 end
 ```
@@ -52,6 +55,82 @@ File extension determines the dialect — `.js`, `.jsx`, `.ts`, `.tsx`:
 ```
 
 AST node `:type` and `:kind` values are snake_case atoms (e.g. `:import_declaration`, `:variable_declaration`, `:const`).
+
+### Codegen
+
+Generate JavaScript source from an AST map — the inverse of `parse/2`.
+Uses OXC's code generator for correct operator precedence, formatting, and semicolons:
+
+```elixir
+{:ok, ast} = OXC.parse("const x = 1 + 2", "test.js")
+{:ok, js} = OXC.codegen(ast)
+# "const x = 1 + 2;\n"
+```
+
+Construct AST by hand and generate JS:
+
+```elixir
+ast = %{type: :program, body: [
+  %{type: :function_declaration,
+    id: %{type: :identifier, name: "add"},
+    params: [%{type: :identifier, name: "a"}, %{type: :identifier, name: "b"}],
+    body: %{type: :block_statement, body: [
+      %{type: :return_statement, argument: %{type: :binary_expression, operator: "+",
+        left: %{type: :identifier, name: "a"}, right: %{type: :identifier, name: "b"}}}
+    ]}}
+]}
+
+OXC.codegen!(ast)
+# "function add(a, b) {\n\treturn a + b;\n}\n"
+```
+
+### Bind (Quasiquoting)
+
+Parse a JS template with `$placeholders`, substitute values, and generate code.
+Like Elixir's `quote`/`unquote` but for JavaScript:
+
+```elixir
+js =
+  OXC.parse!("const $name = $value", "t.js")
+  |> OXC.bind(name: "count", value: {:literal, 0})
+  |> OXC.codegen!()
+# "const count = 0;\n"
+```
+
+Binding values can be:
+- A string — replaces the identifier name
+- `{:literal, value}` — replaces with a literal node (string, number, boolean, nil)
+- A map with `:type` — splices a raw AST node
+
+```elixir
+# Splice an AST node
+expr = %{type: :binary_expression, operator: "+",
+         left: %{type: :literal, value: 1},
+         right: %{type: :literal, value: 2}}
+
+js =
+  OXC.parse!("const result = $expr", "t.js")
+  |> OXC.bind(expr: expr)
+  |> OXC.codegen!()
+# "const result = 1 + 2;\n"
+```
+
+Use `.js`/`.ts` files as templates with full editor support:
+
+```elixir
+# priv/templates/api-client.js — real JS, full syntax highlighting
+# import { z } from "zod";
+# export const $schema = z.object($fields);
+# export async function $listFn(params = {}) { ... }
+
+template = File.read!("priv/templates/api-client.js")
+ast = OXC.parse!(template, "api-client.js")
+
+js =
+  ast
+  |> OXC.bind(schema: "userSchema", listFn: "listUsers", ...)
+  |> OXC.codegen!()
+```
 
 ### Transform
 
@@ -96,6 +175,63 @@ Custom JSX import source (Vue, Preact, etc.):
 
 {:ok, min} = OXC.minify(code, "test.js", mangle: false)
 # Compress without renaming variables
+```
+
+### Lint
+
+Lint JavaScript/TypeScript with oxlint's 650+ built-in rules:
+
+```elixir
+{:ok, diags} = OXC.Lint.run("x == y", "test.js",
+  rules: %{"eqeqeq" => :deny})
+# [%{rule: "eqeqeq", message: "Require the use of === and !==", severity: :deny, ...}]
+
+{:ok, []} = OXC.Lint.run("export const x = 1;\n", "test.ts")
+```
+
+Enable specific plugins:
+
+```elixir
+{:ok, diags} = OXC.Lint.run(source, "app.tsx",
+  plugins: [:react, :typescript],
+  rules: %{"no-console" => :warn, "react/no-danger" => :deny})
+```
+
+Available plugins: `:react`, `:typescript`, `:unicorn`, `:import`, `:jsdoc`,
+`:jest`, `:vitest`, `:jsx_a11y`, `:nextjs`, `:react_perf`, `:promise`,
+`:node`, `:vue`, `:oxc`.
+
+#### Custom Elixir Rules
+
+Write project-specific lint rules in Elixir using the same AST from `OXC.parse/2`:
+
+```elixir
+defmodule MyApp.NoConsoleLog do
+  @behaviour OXC.Lint.Rule
+
+  @impl true
+  def meta do
+    %{name: "my-app/no-console-log",
+      description: "Disallow console.log in production code",
+      category: :restriction, fixable: false}
+  end
+
+  @impl true
+  def run(ast, _context) do
+    OXC.collect(ast, fn
+      %{type: :call_expression,
+        callee: %{type: :member_expression,
+                  object: %{type: :identifier, name: "console"},
+                  property: %{type: :identifier, name: "log"}},
+        start: start, end: stop} ->
+        {:keep, %{span: {start, stop}, message: "Unexpected console.log"}}
+      _ -> :skip
+    end)
+  end
+end
+
+{:ok, diags} = OXC.Lint.run(source, "app.ts",
+  custom_rules: [{MyApp.NoConsoleLog, :warn}])
 ```
 
 ### Import Extraction
@@ -254,6 +390,7 @@ All functions have bang variants that raise `OXC.Error` on failure:
 ast = OXC.parse!("const x = 1", "test.js")
 js = OXC.transform!("const x: number = 42", "test.ts")
 min = OXC.minify!("const x = 1 + 2;", "test.js")
+js = OXC.codegen!(ast)
 imports = OXC.imports!("import { ref } from 'vue'", "test.ts")
 ```
 
@@ -270,13 +407,23 @@ maps with a `:message` key:
 
 OXC is a collection of high-performance JavaScript tools written in Rust.
 This library wraps `oxc_parser`, `oxc_transformer`, `oxc_minifier`,
-`oxc_transformer_plugins`, and `oxc_codegen` via [Rustler](https://github.com/rusterlium/rustler) NIFs,
-and uses Rolldown/OXC for `bundle/2`.
+`oxc_transformer_plugins`, `oxc_codegen`, and `oxc_linter` via
+[Rustler](https://github.com/rusterlium/rustler) NIFs, and uses
+Rolldown/OXC for `bundle/2`.
 
 All NIF calls run on the dirty CPU scheduler so they don't block the BEAM.
-The parser produces ESTree JSON via OXC's serializer, Rustler encodes it
-as BEAM terms, and the Elixir wrapper normalizes AST keys to atoms with
-snake_case type values.
+
+For **parse**, the parser produces ESTree JSON via OXC's serializer,
+Rustler encodes it as BEAM terms, and the Elixir wrapper normalizes
+AST keys to atoms with snake_case type values.
+
+For **codegen**, the reverse happens: the Elixir AST map (BEAM terms) is
+read directly by the NIF via Rustler's Term API, reconstructed into OXC's
+arena-allocated AST using `AstBuilder`, and then emitted as JavaScript
+via `oxc_codegen`.
+
+For **lint**, oxlint's built-in rules run natively in Rust. Custom rules
+written in Elixir receive the same parsed AST and run in the BEAM.
 
 ## License
 

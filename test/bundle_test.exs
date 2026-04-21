@@ -431,4 +431,46 @@ defmodule OXC.BundleTest do
       index -> index
     end
   end
+
+  describe "bundle/2 external option" do
+    test "preserves bare specifiers as ESM imports" do
+      files = [
+        {"main.ts", ~s|import { createApp } from 'vue'\ncreateApp({})|}
+      ]
+
+      {:ok, js} = OXC.bundle(files, entry: "main.ts", format: :esm, external: ["vue"])
+      assert js =~ ~s|from "vue"|
+      refute js =~ "__require"
+    end
+
+    test "merges with auto-detected externals" do
+      files = [
+        {"main.ts",
+         ~s|import { ref } from 'vue'\nimport { computed } from '@vue/reactivity'\nconsole.log(ref, computed)|}
+      ]
+
+      {:ok, js} =
+        OXC.bundle(files, entry: "main.ts", format: :esm, external: ["@vue/reactivity"])
+
+      assert js =~ ~s|from "vue"|
+      assert js =~ ~s|from "@vue/reactivity"|
+    end
+
+    test "has no effect on resolvable relative imports" do
+      files = [
+        {"helper.ts", "export const x = 42;"},
+        {"main.ts", "import { x } from './helper'\nconsole.log(x);"}
+      ]
+
+      {:ok, js} = OXC.bundle(files, entry: "main.ts", format: :esm)
+      assert js =~ "42"
+      refute js =~ "from.*helper"
+    end
+
+    test "defaults to empty list" do
+      files = [{"main.ts", "const x = 1;"}]
+      {:ok, js} = OXC.bundle(files, entry: "main.ts")
+      assert_valid_bundle(js)
+    end
+  end
 end

@@ -310,7 +310,12 @@ fn bundle_with_rolldown(
     let entry_name = normalize_virtual_path(&opts.entry)
         .map(|path| path.to_string_lossy().replace('\\', "/"))
         .map_err(|message| vec![message])?;
-    let external_specifiers = collect_external_specifiers(&files)?;
+    let mut external_specifiers = collect_external_specifiers(&files)?;
+    for spec in &opts.external {
+        if !external_specifiers.contains(spec) {
+            external_specifiers.push(spec.clone());
+        }
+    }
     let tempdir = TempDir::new()
         .map_err(|error| vec![format!("Failed to create temp directory: {error}")])?;
     let cwd = tempdir

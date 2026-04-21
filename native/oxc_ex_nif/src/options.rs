@@ -77,6 +77,7 @@ pub struct BundleOptions {
     pub footer: Option<String>,
     pub preamble: Option<String>,
     pub define: BTreeMap<String, String>,
+    pub external: Vec<String>,
     pub sourcemap: bool,
     pub drop_console: bool,
     #[serde(rename = "jsx", default = "default_jsx_runtime")]

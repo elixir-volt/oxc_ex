@@ -395,6 +395,10 @@ defmodule OXC do
     * `:footer` — string to append after the IIFE
     * `:preamble` — code to inject at the top of the IIFE function body,
       before any bundled modules (e.g. `"const { ref } = Vue;"`)
+    * `:external` — list of bare specifiers to treat as external and preserve
+      as `import` statements in the output (e.g. `["react", "scheduler"]`).
+      Bare specifiers from ESM imports are auto-detected as external;
+      use this for additional specifiers the auto-detection misses.
     * `:define` — compile-time replacements, map of `%{"process.env.NODE_ENV" => ~s("production")}`
     * `:sourcemap` — generate a source map (default: `false`). When `true`,
       returns `%{code: String.t(), sourcemap: String.t()}` instead of a plain string.
@@ -470,6 +474,7 @@ defmodule OXC do
       "footer" => Keyword.get(opts, :footer),
       "preamble" => Keyword.get(opts, :preamble),
       "define" => Keyword.get(opts, :define, %{}),
+      "external" => Keyword.get(opts, :external, []),
       "sourcemap" => Keyword.get(opts, :sourcemap, false),
       "drop_console" => Keyword.get(opts, :drop_console, false),
       "jsx" => normalize_jsx_runtime(Keyword.get(opts, :jsx, :automatic)),

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.10.0
+
+### Added
+
+- `OXC.codegen/1` / `codegen!/1` — generate JavaScript source from ESTree AST maps via OXC's code generator. Proper operator precedence, formatting, and semicolons. Roundtrips with `parse/2`.
+- `OXC.bind/2` — substitute `$placeholders` in a parsed AST with identifiers, literals (including recursive maps/lists → JS objects/arrays), parsed expressions, or raw AST nodes.
+- `OXC.splice/3` — expand a `$placeholder` statement, object property, or array element into a list of nodes. Strings are auto-parsed as JS.
+- `:external` option for `OXC.bundle/2` — list of bare specifiers to preserve as `import` statements in the output. Merged with auto-detected ESM externals.
+
 ## 0.9.1
 
 ### Fixed

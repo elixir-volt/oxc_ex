@@ -2,10 +2,10 @@ use std::path::Path;
 
 use oxc_allocator::Allocator;
 use oxc_formatter::{
-    get_parse_options, ArrowParentheses, AttributePosition, BracketSameLine, BracketSpacing,
-    EmbeddedLanguageFormatting, Expand, FormatOptions, Formatter, IndentStyle, IndentWidth,
-    LineEnding, LineWidth, OperatorPosition, QuoteProperties, QuoteStyle, Semicolons,
-    SortImportsOptions, SortOrder, TrailingCommas,
+    enable_jsx_source_type, get_parse_options, ArrowParentheses, AttributePosition,
+    BracketSameLine, BracketSpacing, EmbeddedLanguageFormatting, Expand, FormatOptions, Formatter,
+    IndentStyle, IndentWidth, LineEnding, LineWidth, OperatorPosition, QuoteProperties, QuoteStyle,
+    Semicolons, SortImportsOptions, SortOrder, TrailingCommas,
 };
 use oxc_parser::Parser;
 use oxc_span::SourceType;
@@ -275,7 +275,7 @@ fn decode_sort_tailwindcss(m: Term) -> oxc_formatter::SortTailwindcssOptions {
 #[rustler::nif(schedule = "DirtyCpu")]
 fn format<'a>(env: Env<'a>, source: &str, filename: &str, opts: Term<'a>) -> NifResult<Term<'a>> {
     let path = Path::new(filename);
-    let source_type = SourceType::from_path(path).unwrap_or_default();
+    let source_type = enable_jsx_source_type(SourceType::from_path(path).unwrap_or_default());
 
     let allocator = Allocator::default();
     let ret = Parser::new(&allocator, source, source_type)

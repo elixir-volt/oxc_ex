@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.1
+
+### Fixed
+
+- Enable JSX parsing for `.js` files in formatter, matching oxfmt CLI behavior. Fixes formatting failures on projects using JSX in `.js` files (e.g. Plausible Analytics).
+
 ## 0.9.0
 
 ### Added

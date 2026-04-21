@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.0
+
+### Added
+
+- `OXC.Format` — Prettier-compatible JS/TS formatter via oxfmt (~30× faster than Prettier). Separate `oxc_fmt_nif` Rust NIF crate. All oxfmt options supported: `print_width`, `tab_width`, `use_tabs`, `semi`, `single_quote`, `jsx_single_quote`, `trailing_comma`, `bracket_spacing`, `bracket_same_line`, `arrow_parens`, `end_of_line`, `quote_props`, `single_attribute_per_line`, `object_wrap`, `experimental_operator_position`, `experimental_ternaries`, `embedded_language_formatting`, `sort_imports`, `sort_tailwindcss`.
+- `OXC.Lint.run!/3` — bang variant that raises `OXC.Error` on parse errors.
+
+### Changed
+
+- `OXC.Format.run!/3` raises `OXC.Error` instead of `RuntimeError`.
+
 ## 0.8.0
 
 ### Added

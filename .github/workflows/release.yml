@@ -61,6 +61,19 @@ jobs:
           project-dir: "native/oxc_lint_nif"
           cross-version: "from-source"
 
+      - name: Build oxc_fmt_nif
+        if: matrix.job.target != 'x86_64-unknown-linux-musl'
+        id: build-fmt-crate
+        uses: philss/rustler-precompiled-action@v1.1.4
+        with:
+          project-name: oxc_fmt_nif
+          project-version: ${{ env.PROJECT_VERSION }}
+          target: ${{ matrix.job.target }}
+          nif-version: ${{ matrix.nif }}
+          use-cross: ${{ matrix.job.use-cross }}
+          project-dir: "native/oxc_fmt_nif"
+          cross-version: "from-source"
+
       - name: Artifact upload
         uses: actions/upload-artifact@v4
         with:
@@ -74,9 +87,17 @@ jobs:
           name: ${{ steps.build-lint-crate.outputs.file-name }}
           path: ${{ steps.build-lint-crate.outputs.file-path }}
 
+      - name: Artifact upload (fmt)
+        if: matrix.job.target != 'x86_64-unknown-linux-musl'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build-fmt-crate.outputs.file-name }}
+          path: ${{ steps.build-fmt-crate.outputs.file-path }}
+
       - name: Publish archives and packages
         uses: softprops/action-gh-release@v2
         with:
           files: |
             ${{ steps.build-crate.outputs.file-path }}
             ${{ steps.build-lint-crate.outputs.file-path }}
+            ${{ steps.build-fmt-crate.outputs.file-path }}

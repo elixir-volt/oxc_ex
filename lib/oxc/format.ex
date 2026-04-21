@@ -7,10 +7,10 @@ defmodule OXC.Format do
 
   ## Examples
 
-      {:ok, formatted} = OXC.Format.format("const x=1;let   y =  2;", "test.js")
+      {:ok, formatted} = OXC.Format.run("const x=1;let   y =  2;", "test.js")
       # "const x = 1;\nlet y = 2;\n"
 
-      {:ok, formatted} = OXC.Format.format("const x=1", "test.js", semi: false)
+      {:ok, formatted} = OXC.Format.run("const x=1", "test.js", semi: false)
       # "const x = 1\n"
   """
 
@@ -94,21 +94,21 @@ defmodule OXC.Format do
 
   ## Examples
 
-      iex> {:ok, code} = OXC.Format.format("const   x=1", "test.js")
+      iex> {:ok, code} = OXC.Format.run("const   x=1", "test.js")
       iex> code
       "const x = 1;\\n"
 
-      iex> {:ok, code} = OXC.Format.format("const x=1", "test.js", semi: false)
+      iex> {:ok, code} = OXC.Format.run("const x=1", "test.js", semi: false)
       iex> code
       "const x = 1\\n"
 
-      iex> {:ok, code} = OXC.Format.format("const x = {a: 1, b: 2}", "test.js", print_width: 20)
+      iex> {:ok, code} = OXC.Format.run("const x = {a: 1, b: 2}", "test.js", print_width: 20)
       iex> String.contains?(code, "\\n")
       true
   """
-  @spec format(String.t(), String.t(), [option()]) ::
+  @spec run(String.t(), String.t(), [option()]) ::
           {:ok, String.t()} | {:error, [String.t()]}
-  def format(source, filename, opts \\ []) do
+  def run(source, filename, opts \\ []) do
     opts_map =
       opts
       |> Enum.into(%{})
@@ -146,18 +146,21 @@ defmodule OXC.Format do
   end
 
   @doc """
-  Like `format/3` but raises on errors.
+  Like `run/3` but raises on errors.
 
   ## Examples
 
-      iex> OXC.Format.format!("const   x=1", "test.js")
+      iex> OXC.Format.run!("const   x=1", "test.js")
       "const x = 1;\\n"
   """
-  @spec format!(String.t(), String.t(), [option()]) :: String.t()
-  def format!(source, filename, opts \\ []) do
-    case format(source, filename, opts) do
-      {:ok, code} -> code
-      {:error, errors} -> raise "OXC format error: #{inspect(errors)}"
+  @spec run!(String.t(), String.t(), [option()]) :: String.t()
+  def run!(source, filename, opts \\ []) do
+    case run(source, filename, opts) do
+      {:ok, code} ->
+        code
+
+      {:error, errors} ->
+        raise OXC.Error, message: "OXC format error: #{inspect(errors)}", errors: errors
     end
   end
 end

@@ -92,6 +92,20 @@ defmodule OXC.Lint do
     end
   end
 
+  @doc """
+  Like `run/3` but raises on errors.
+  """
+  @spec run!(String.t(), String.t(), keyword()) :: [diagnostic()]
+  def run!(source, filename, opts \\ []) do
+    case run(source, filename, opts) do
+      {:ok, diags} ->
+        diags
+
+      {:error, errors} ->
+        raise OXC.Error, message: "OXC lint error: #{inspect(errors)}", errors: errors
+    end
+  end
+
   defp severity_to_string(:deny), do: "deny"
   defp severity_to_string(:warn), do: "warn"
   defp severity_to_string(:allow), do: "allow"

@@ -1,4 +1,5 @@
 mod bundle;
+mod codegen;
 mod error;
 mod imports;
 mod options;

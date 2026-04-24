@@ -378,16 +378,18 @@ defmodule OXC do
   end
 
   @doc """
-  Bundle multiple TypeScript/JavaScript modules into a single IIFE script.
+  Bundle JavaScript/TypeScript into a single output file.
 
-  Takes a list of `{filename, source}` tuples representing a virtual project.
-  Modules can import each other via relative paths and are bundled into a
-  single IIFE script.
+  Accepts either a filesystem entry path or a list of `{filename, source}`
+  tuples representing a virtual project. Filesystem entries resolve packages
+  through the real project directory (`:cwd`); virtual projects are useful for
+  tests and generated sources.
 
   ## Options
 
-    * `:entry` — entry module filename from `files` (required), for example
+    * `:entry` — entry module filename when bundling virtual `files`, for example
       `"main.ts"`
+    * `:cwd` — project directory for filesystem entries and package resolution
     * `:format` — output format: `:iife` (default), `:esm`, or `:cjs`
     * `:minify` — minify the output (default: `false`)
     * `:treeshake` — enable tree-shaking to remove unused exports (default: `false`)
@@ -395,10 +397,15 @@ defmodule OXC do
     * `:footer` — string to append after the IIFE
     * `:preamble` — code to inject at the top of the IIFE function body,
       before any bundled modules (e.g. `"const { ref } = Vue;"`)
-    * `:external` — list of bare specifiers to treat as external and preserve
-      as `import` statements in the output (e.g. `["react", "scheduler"]`).
-      Bare specifiers from ESM imports are auto-detected as external;
-      use this for additional specifiers the auto-detection misses.
+    * `:external` — list of specifiers to treat as external and preserve
+      as imports in the output (e.g. `["react", "scheduler"]`)
+    * `:exports` — output export mode: `:auto`, `:default`, `:named`, or `:none`
+    * `:preserve_entry_signatures` — Rolldown entry signature mode:
+      `:strict`, `:allow_extension`, `:exports_only`, or `false`
+    * `:conditions` — package export conditions used by Rolldown's resolver,
+      for example `["browser", "import", "default"]`
+    * `:main_fields` — package.json fields used for package entry resolution
+    * `:modules` — module directories used by the resolver
     * `:define` — compile-time replacements, map of `%{"process.env.NODE_ENV" => ~s("production")}`
     * `:sourcemap` — generate a source map (default: `false`). When `true`,
       returns `%{code: String.t(), sourcemap: String.t()}` instead of a plain string.
@@ -423,8 +430,17 @@ defmodule OXC do
       iex> String.contains?(js, "import ")
       false
   """
-  @spec bundle([{String.t(), String.t()}], keyword()) :: bundle_result()
-  def bundle(files, opts \\ []) do
+  @spec bundle(String.t() | [{String.t(), String.t()}], keyword()) :: bundle_result()
+  def bundle(input, opts \\ [])
+
+  def bundle(entry, opts) when is_binary(entry) do
+    case OXC.Native.bundle_entry(entry, normalize_bundle_options(opts)) do
+      {:ok, result} -> {:ok, normalize_native_result(result)}
+      {:error, errors} -> {:error, atomize_term_keys(errors)}
+    end
+  end
+
+  def bundle(files, opts) when is_list(files) do
     if Keyword.get(opts, :entry, "") == "" do
       {:error, [%{message: "bundle/2 requires :entry, for example: entry: \"main.ts\""}]}
     else
@@ -467,7 +483,9 @@ defmodule OXC do
   defp normalize_bundle_options(opts) do
     %{
       "entry" => Keyword.get(opts, :entry, ""),
+      "cwd" => Keyword.get(opts, :cwd, ""),
       "format" => opts |> Keyword.get(:format, :iife) |> Atom.to_string(),
+      "exports" => opts |> Keyword.get(:exports, :auto) |> Atom.to_string(),
       "minify" => Keyword.get(opts, :minify, false),
       "treeshake" => Keyword.get(opts, :treeshake, false),
       "banner" => Keyword.get(opts, :banner),
@@ -475,6 +493,11 @@ defmodule OXC do
       "preamble" => Keyword.get(opts, :preamble),
       "define" => Keyword.get(opts, :define, %{}),
       "external" => Keyword.get(opts, :external, []),
+      "preserve_entry_signatures" =>
+        normalize_preserve_entry_signatures(Keyword.get(opts, :preserve_entry_signatures, nil)),
+      "conditions" => Keyword.get(opts, :conditions, []),
+      "main_fields" => Keyword.get(opts, :main_fields, []),
+      "modules" => Keyword.get(opts, :modules, []),
       "sourcemap" => Keyword.get(opts, :sourcemap, false),
       "drop_console" => Keyword.get(opts, :drop_console, false),
       "jsx" => normalize_jsx_runtime(Keyword.get(opts, :jsx, :automatic)),
@@ -484,6 +507,12 @@ defmodule OXC do
       "target" => Keyword.get(opts, :target, "")
     }
   end
+
+  defp normalize_preserve_entry_signatures(nil), do: ""
+  defp normalize_preserve_entry_signatures(false), do: "false"
+  defp normalize_preserve_entry_signatures(value) when is_atom(value), do: Atom.to_string(value)
+  defp normalize_preserve_entry_signatures(value) when is_binary(value), do: value
+  defp normalize_preserve_entry_signatures(_value), do: ""
 
   defp normalize_jsx_runtime(runtime) when is_atom(runtime), do: Atom.to_string(runtime)
   defp normalize_jsx_runtime(runtime) when is_binary(runtime), do: runtime

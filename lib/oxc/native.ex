@@ -37,6 +37,9 @@ defmodule OXC.Native do
           {:ok, String.t() | map()} | {:error, [String.t()]}
   def bundle(_files, _opts), do: :erlang.nif_error(:nif_not_loaded)
 
+  @spec bundle_entry(String.t(), map()) :: {:ok, String.t() | map()} | {:error, [String.t()]}
+  def bundle_entry(_entry, _opts), do: :erlang.nif_error(:nif_not_loaded)
+
   @spec imports(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, [String.t()]}
   def imports(_source, _filename), do: :erlang.nif_error(:nif_not_loaded)
 

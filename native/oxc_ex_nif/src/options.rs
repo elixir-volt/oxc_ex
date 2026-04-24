@@ -69,8 +69,10 @@ impl Default for MinifyInput {
 #[serde(default)]
 pub struct BundleOptions {
     pub entry: String,
+    pub cwd: String,
     #[serde(default = "default_format")]
     pub format: String,
+    pub exports: String,
     pub minify: bool,
     pub treeshake: bool,
     pub banner: Option<String>,
@@ -78,6 +80,10 @@ pub struct BundleOptions {
     pub preamble: Option<String>,
     pub define: BTreeMap<String, String>,
     pub external: Vec<String>,
+    pub preserve_entry_signatures: String,
+    pub conditions: Vec<String>,
+    pub main_fields: Vec<String>,
+    pub modules: Vec<String>,
     pub sourcemap: bool,
     pub drop_console: bool,
     #[serde(rename = "jsx", default = "default_jsx_runtime")]

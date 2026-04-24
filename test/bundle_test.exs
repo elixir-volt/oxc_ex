@@ -443,17 +443,13 @@ defmodule OXC.BundleTest do
       refute js =~ "__require"
     end
 
-    test "merges with auto-detected externals" do
+    test "leaves unresolved bare specifiers as imports" do
       files = [
-        {"main.ts",
-         ~s|import { ref } from 'vue'\nimport { computed } from '@vue/reactivity'\nconsole.log(ref, computed)|}
+        {"main.ts", ~s|import { ref } from 'vue'\nconsole.log(ref)|}
       ]
 
-      {:ok, js} =
-        OXC.bundle(files, entry: "main.ts", format: :esm, external: ["@vue/reactivity"])
-
+      {:ok, js} = OXC.bundle(files, entry: "main.ts", format: :esm)
       assert js =~ ~s|from "vue"|
-      assert js =~ ~s|from "@vue/reactivity"|
     end
 
     test "has no effect on resolvable relative imports" do
@@ -472,5 +468,67 @@ defmodule OXC.BundleTest do
       {:ok, js} = OXC.bundle(files, entry: "main.ts")
       assert_valid_bundle(js)
     end
+  end
+
+  describe "bundle/2 filesystem entries" do
+    test "bundles from a real project directory" do
+      dir = tmp_dir("fs-entry")
+      File.mkdir_p!(Path.join(dir, "src"))
+      File.write!(Path.join(dir, "src/util.ts"), "export const answer: number = 42")
+
+      File.write!(
+        Path.join(dir, "src/main.ts"),
+        "import { answer } from './util'\nconsole.log(answer)"
+      )
+
+      {:ok, js} = OXC.bundle("src/main.ts", cwd: dir, format: :esm)
+
+      assert js =~ "42"
+      refute js =~ "number"
+      refute js =~ "./util"
+    end
+
+    test "exposes Rolldown CommonJS export mode" do
+      dir = tmp_dir("cjs-named-exports")
+      File.mkdir_p!(dir)
+      File.write!(Path.join(dir, "index.js"), "exports.foo = 123; exports.bar = 456;")
+
+      {:ok, js} = OXC.bundle("index.js", cwd: dir, format: :cjs, exports: :named)
+
+      assert js =~ "exports.foo = 123"
+      assert js =~ "exports.bar = 456"
+    end
+
+    test "uses browser conditions when provided" do
+      dir = tmp_dir("conditions")
+      File.mkdir_p!(Path.join(dir, "node_modules/pkg"))
+      File.write!(Path.join(dir, "main.js"), "import value from 'pkg'\nconsole.log(value)")
+
+      File.write!(
+        Path.join(dir, "node_modules/pkg/package.json"),
+        ~s({"exports":{".":{"browser":"./browser.js","default":"./server.js"}}})
+      )
+
+      File.write!(Path.join(dir, "node_modules/pkg/browser.js"), "export default 'browser-build'")
+      File.write!(Path.join(dir, "node_modules/pkg/server.js"), "export default 'server-build'")
+
+      {:ok, js} =
+        OXC.bundle("main.js", cwd: dir, format: :esm, conditions: ["browser", "default"])
+
+      assert js =~ "browser-build"
+      refute js =~ "server-build"
+    end
+  end
+
+  defp tmp_dir(name) do
+    dir =
+      Path.join([
+        System.tmp_dir!(),
+        "oxc-bundle-test-#{System.unique_integer([:positive])}",
+        name
+      ])
+
+    File.rm_rf!(dir)
+    dir
   end
 end

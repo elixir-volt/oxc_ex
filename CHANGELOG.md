@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.11.0
+
+### Added
+
+- `OXC.bundle/2` accepts filesystem entry paths, e.g. `OXC.bundle("src/main.ts", cwd: project_dir)`, alongside virtual `{filename, source}` projects.
+- Bundle resolver options for Rolldown: `:conditions`, `:main_fields`, and `:modules`.
+- Bundle output options for Rolldown: `:exports` and `:preserve_entry_signatures`.
+
+### Changed
+
+- Removed the binding-level bare import auto-externalization pass; Rolldown now handles unresolved externals directly.
+
 ## 0.10.0
 
 ### Added

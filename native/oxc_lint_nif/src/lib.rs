@@ -177,7 +177,7 @@ fn lint<'a>(
         .semantic;
 
     let module_record = Arc::new(ModuleRecord::default());
-    let ctx_host = oxc_linter::ContextSubHost::new(semantic, module_record, 0);
+    let ctx_host = oxc_linter::ContextSubHost::new(semantic, module_record, 0, Default::default());
     let messages = linter.run(path, vec![ctx_host], &allocator);
 
     let diagnostics: Vec<Diagnostic> = messages

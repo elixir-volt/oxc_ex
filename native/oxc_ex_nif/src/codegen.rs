@@ -3,7 +3,8 @@ use std::cell::Cell;
 use oxc_allocator::{Allocator, Box as OxcBox, Vec as OxcVec};
 use oxc_ast::{ast::*, AstBuilder, NONE};
 use oxc_codegen::{Codegen, CodegenReturn};
-use oxc_span::{Atom, SourceType, SPAN};
+use oxc_span::{SourceType, SPAN};
+use oxc_str::Str as OxcStr;
 use oxc_syntax::{
     node::NodeId,
     number::{BigintBase, NumberBase},
@@ -130,22 +131,22 @@ fn nid() -> Cell<NodeId> {
     Cell::new(NodeId::DUMMY)
 }
 
-fn atom<'a>(b: AstBuilder<'a>, s: &str) -> Atom<'a> {
-    Atom::from(b.str(s))
+fn oxc_s<'a>(b: AstBuilder<'a>, s: &str) -> OxcStr<'a> {
+    b.str(s)
 }
 
 fn ident_name<'a>(b: AstBuilder<'a>, s: &str) -> IdentifierName<'a> {
-    IdentifierName { node_id: nid(), span: SPAN, name: b.str(s).into() }
+    b.identifier_name(SPAN, b.ident(s))
 }
 
 fn str_lit<'a>(b: AstBuilder<'a>, s: &str) -> StringLiteral<'a> {
-    StringLiteral { node_id: nid(), span: SPAN, value: atom(b, s), raw: None, lone_surrogates: false }
+    b.string_literal(SPAN, b.str(s), None)
 }
 
 fn opt_binding_id<'a>(b: AstBuilder<'a>, term: Term) -> Option<BindingIdentifier<'a>> {
     opt(term, a::id()).map(|t| {
         let n = str_val(t, a::name());
-        b.binding_identifier(SPAN, b.str(&n))
+        b.binding_identifier(SPAN, b.ident(&n))
     })
 }
 
@@ -177,7 +178,7 @@ pub fn codegen<'a>(env: Env<'a>, ast: Term<'a>) -> NifResult<Term<'a>> {
 
 fn build_program<'a>(b: AstBuilder<'a>, term: Term) -> R<Program<'a>> {
     let body = build_stmts(b, list_val(term, a::body()))?;
-    Ok(b.program(SPAN, SourceType::mjs(), b.str(""), b.vec(), None, b.vec(), body))
+    Ok(b.program(SPAN, SourceType::mjs(), "", b.vec(), None, b.vec(), body))
 }
 
 // ── Statements ──
@@ -291,7 +292,7 @@ fn build_stmt<'a>(b: AstBuilder<'a>, term: Term) -> R<Statement<'a>> {
     }
     if ty == a::labeled_statement() {
         let lt = get(term, a::label()).ok_or("Missing :label")?;
-        let label = LabelIdentifier { node_id: nid(), span: SPAN, name: b.str(&str_val(lt, a::name())).into() };
+        let label = LabelIdentifier { node_id: nid(), span: SPAN, name: b.ident(&str_val(lt, a::name())) };
         let body = build_stmt(b, get(term, a::body()).ok_or("Missing :body")?)?;
         return Ok(b.statement_labeled(SPAN, label, body));
     }
@@ -325,14 +326,14 @@ fn build_expr<'a>(b: AstBuilder<'a>, term: Term) -> R<Expression<'a>> {
 
     if ty == a::identifier() || ty == a::identifier_reference() {
         let n = str_val(term, a::name());
-        return Ok(b.expression_identifier(SPAN, b.str(&n)));
+        return Ok(b.expression_identifier(SPAN, b.ident(&n)));
     }
     if ty == a::literal() { return build_generic_lit(b, term); }
     if ty == a::numeric_literal() { return Ok(b.expression_numeric_literal(SPAN, f64_val(term, a::value()), None, NumberBase::Decimal)); }
-    if ty == a::string_literal() { let s = str_val(term, a::value()); return Ok(b.expression_string_literal(SPAN, atom(b, &s), None)); }
+    if ty == a::string_literal() { let s = str_val(term, a::value()); return Ok(b.expression_string_literal(SPAN, oxc_s(b, &s), None)); }
     if ty == a::boolean_literal() { return Ok(b.expression_boolean_literal(SPAN, bool_val(term, a::value()))); }
     if ty == a::null_literal() { return Ok(b.expression_null_literal(SPAN)); }
-    if ty == a::big_int_literal() { let v = str_val(term, a::value()); return Ok(b.expression_big_int_literal(SPAN, atom(b, &v), None, BigintBase::Decimal)); }
+    if ty == a::big_int_literal() { let v = str_val(term, a::value()); return Ok(b.expression_big_int_literal(SPAN, oxc_s(b, &v), None, BigintBase::Decimal)); }
     if ty == a::reg_exp_literal() { return build_regexp(b, term); }
 
     if ty == a::binary_expression() {
@@ -399,7 +400,7 @@ fn build_expr<'a>(b: AstBuilder<'a>, term: Term) -> R<Expression<'a>> {
         let mut elems = b.vec_with_capacity(elems_list.len());
         for e in &elems_list {
             if is_nil(*e) {
-                elems.push(ArrayExpressionElement::Elision(Elision { node_id: nid(), span: SPAN }));
+                elems.push(ArrayExpressionElement::Elision(b.alloc(Elision { node_id: nid(), span: SPAN })));
             } else if type_eq(*e, a::spread_element()) {
                 let arg = build_expr(b, get(*e, a::argument()).ok_or("Missing spread :argument")?)?;
                 elems.push(ArrayExpressionElement::SpreadElement(b.alloc(b.spread_element(SPAN, arg))));
@@ -490,7 +491,7 @@ fn build_generic_lit<'a>(b: AstBuilder<'a>, term: Term) -> R<Expression<'a>> {
     if let Some(rx) = opt(term, a::regex()) { return build_regexp_from(b, rx); }
     if opt(term, a::bigint()).is_some() {
         let v = str_val(term, a::bigint());
-        return Ok(b.expression_big_int_literal(SPAN, atom(b, &v), None, BigintBase::Decimal));
+        return Ok(b.expression_big_int_literal(SPAN, oxc_s(b, &v), None, BigintBase::Decimal));
     }
     match get(term, a::value()) {
         None => Ok(b.expression_null_literal(SPAN)),
@@ -499,7 +500,7 @@ fn build_generic_lit<'a>(b: AstBuilder<'a>, term: Term) -> R<Expression<'a>> {
             if let Ok(v) = t.decode::<bool>() { return Ok(b.expression_boolean_literal(SPAN, v)); }
             if let Ok(v) = t.decode::<f64>() { return Ok(b.expression_numeric_literal(SPAN, v, None, NumberBase::Decimal)); }
             if let Ok(v) = t.decode::<i64>() { return Ok(b.expression_numeric_literal(SPAN, v as f64, None, NumberBase::Decimal)); }
-            if let Ok(v) = t.decode::<String>() { return Ok(b.expression_string_literal(SPAN, atom(b, &v), None)); }
+            if let Ok(v) = t.decode::<String>() { return Ok(b.expression_string_literal(SPAN, oxc_s(b, &v), None)); }
             Ok(b.expression_null_literal(SPAN))
         }
     }
@@ -515,7 +516,7 @@ fn build_regexp_from<'a>(b: AstBuilder<'a>, rx: Term) -> R<Expression<'a>> {
     Ok(Expression::RegExpLiteral(b.alloc(RegExpLiteral {
         node_id: nid(), span: SPAN, raw: None,
         regex: RegExp {
-            pattern: RegExpPattern { text: atom(b, &pat), pattern: None },
+            pattern: RegExpPattern { text: oxc_s(b, &pat), pattern: None },
             flags: parse_regex_flags(&fl),
         },
     })))
@@ -574,8 +575,8 @@ fn build_quasis<'a>(b: AstBuilder<'a>, list: Vec<Term>) -> R<OxcVec<'a, Template
         let cooked = opt(vt, a::cooked()).and_then(|t| t.decode::<String>().ok());
         let tail = bool_val(*q, a::tail());
         out.push(b.template_element(SPAN, TemplateElementValue {
-            raw: atom(b, &raw),
-            cooked: cooked.as_deref().map(|s| atom(b, s)),
+            raw: oxc_s(b, &raw),
+            cooked: cooked.as_deref().map(|s| oxc_s(b, s)),
         }, tail, false));
     }
     Ok(out)
@@ -708,19 +709,19 @@ fn build_import<'a>(b: AstBuilder<'a>, term: Term) -> R<ModuleDeclaration<'a>> {
                 let imp_name = str_val(get(*s, a::imported()).unwrap_or(*s), a::name());
                 let loc_name = str_val(get(*s, a::local()).unwrap_or(*s), a::name());
                 let imported = ModuleExportName::IdentifierName(ident_name(b, &imp_name));
-                let local = b.binding_identifier(SPAN, b.str(&loc_name));
+                let local = b.binding_identifier(SPAN, b.ident(&loc_name));
                 specs.push(ImportDeclarationSpecifier::ImportSpecifier(
                     b.alloc(b.import_specifier(SPAN, imported, local, ImportOrExportKind::Value)),
                 ));
             } else if ty == a::import_default_specifier() {
                 let loc_name = str_val(get(*s, a::local()).unwrap_or(*s), a::name());
                 specs.push(ImportDeclarationSpecifier::ImportDefaultSpecifier(
-                    b.alloc(b.import_default_specifier(SPAN, b.binding_identifier(SPAN, b.str(&loc_name)))),
+                    b.alloc(b.import_default_specifier(SPAN, b.binding_identifier(SPAN, b.ident(&loc_name)))),
                 ));
             } else if ty == a::import_namespace_specifier() {
                 let loc_name = str_val(get(*s, a::local()).unwrap_or(*s), a::name());
                 specs.push(ImportDeclarationSpecifier::ImportNamespaceSpecifier(
-                    b.alloc(b.import_namespace_specifier(SPAN, b.binding_identifier(SPAN, b.str(&loc_name)))),
+                    b.alloc(b.import_namespace_specifier(SPAN, b.binding_identifier(SPAN, b.ident(&loc_name)))),
                 ));
             } else {
                 return err(format!("Unsupported import specifier: {}", type_str(*s)));
@@ -810,7 +811,7 @@ fn build_binding_pat<'a>(b: AstBuilder<'a>, term: Term) -> R<BindingPattern<'a>>
     let ty = type_atom(term).ok_or("Missing pattern type")?;
     if ty == a::identifier() {
         let n = str_val(term, a::name());
-        return Ok(b.binding_pattern_binding_identifier(SPAN, b.str(&n)));
+        return Ok(b.binding_pattern_binding_identifier(SPAN, b.ident(&n)));
     }
     if ty == a::object_pattern() {
         let pl = list_val(term, a::properties());
@@ -860,7 +861,7 @@ fn build_assign_target<'a>(b: AstBuilder<'a>, term: Term) -> R<AssignmentTarget<
     if ty == a::identifier() || ty == a::identifier_reference() {
         let n = str_val(term, a::name());
         return Ok(AssignmentTarget::AssignmentTargetIdentifier(b.alloc(IdentifierReference {
-            node_id: nid(), span: SPAN, name: b.str(&n).into(), reference_id: Default::default(),
+            node_id: nid(), span: SPAN, name: b.ident(&n), reference_id: Default::default(),
         })));
     }
     if ty == a::member_expression() || ty == a::static_member_expression() || ty == a::computed_member_expression() {
@@ -881,7 +882,7 @@ fn build_simple_target<'a>(b: AstBuilder<'a>, term: Term) -> R<SimpleAssignmentT
     if ty == a::identifier() || ty == a::identifier_reference() {
         let n = str_val(term, a::name());
         return Ok(SimpleAssignmentTarget::AssignmentTargetIdentifier(b.alloc(IdentifierReference {
-            node_id: nid(), span: SPAN, name: b.str(&n).into(), reference_id: Default::default(),
+            node_id: nid(), span: SPAN, name: b.ident(&n), reference_id: Default::default(),
         })));
     }
     if ty == a::member_expression() || ty == a::static_member_expression() || ty == a::computed_member_expression() {
@@ -938,7 +939,7 @@ fn build_for_left<'a>(b: AstBuilder<'a>, term: Term) -> R<ForStatementLeft<'a>> 
 fn opt_label<'a>(b: AstBuilder<'a>, term: Term) -> Option<LabelIdentifier<'a>> {
     opt(term, a::label()).map(|t| {
         let n = str_val(t, a::name());
-        LabelIdentifier { node_id: nid(), span: SPAN, name: b.str(&n).into() }
+        LabelIdentifier { node_id: nid(), span: SPAN, name: b.ident(&n) }
     })
 }
 

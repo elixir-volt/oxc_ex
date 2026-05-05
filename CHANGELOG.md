@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.12.0
+
+### Changed
+
+- Upgraded OXC toolchain from 0.117 to 0.129 — 12 releases of parser, transformer, minifier, and codegen improvements.
+- Upgraded OXC formatter from crates_v0.117.0 to crates_v0.129.0.
+- Upgraded OXC linter from crates_v0.117.0 to crates_v0.129.0 (oxc_linter 1.62.0).
+- Upgraded oxc_sourcemap from 6 to 6.1.
+
 ## 0.11.0
 
 ### Added

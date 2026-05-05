@@ -11,10 +11,10 @@ crate-type = ["cdylib"]
 
 [dependencies]
 rustler = { version = "0.37", default-features = false, features = ["derive", "nif_version_2_15"] }
-oxc_linter = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.117.0" }
-oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.117.0" }
-oxc_diagnostics = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.117.0" }
-oxc_parser = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.117.0" }
-oxc_semantic = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.117.0", features = ["cfg", "linter"] }
-oxc_span = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.117.0" }
+oxc_linter = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.129.0" }
+oxc_allocator = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.129.0" }
+oxc_diagnostics = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.129.0" }
+oxc_parser = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.129.0" }
+oxc_semantic = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.129.0", features = ["cfg", "linter"] }
+oxc_span = { git = "https://github.com/oxc-project/oxc", tag = "crates_v0.129.0" }
 serde_json = "1"

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.12.1
+
+### Fixed
+
+- `OXC.bundle/2` with `sourcemap: true` no longer fails when Rolldown omits the source map for empty bundle output ([#4](https://github.com/elixir-volt/oxc_ex/issues/4)).
+
 ## 0.12.0
 
 ### Changed

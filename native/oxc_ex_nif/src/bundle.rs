@@ -380,12 +380,12 @@ fn run_rolldown(
     }
 
     let sourcemap = if opts.sourcemap {
-        let sourcemap_json = chunk
+        chunk
             .map
             .as_ref()
             .map(oxc_sourcemap::SourceMap::to_json_string)
-            .ok_or_else(|| vec!["Rolldown did not produce a source map".to_string()])?;
-        Some(relativize_sourcemap_sources(sourcemap_json, &cwd)?)
+            .map(|json| relativize_sourcemap_sources(json, &cwd))
+            .transpose()?
     } else {
         None
     };

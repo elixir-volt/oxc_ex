@@ -367,6 +367,12 @@ defmodule OXC.BundleTest do
       refute Enum.any?(map["sources"], &String.ends_with?(&1, "bundle.js"))
     end
 
+    test "returns code without sourcemap for empty bundle" do
+      files = [{"main.js", ""}]
+      {:ok, code} = OXC.bundle(files, entry: "main.js", sourcemap: true, format: :iife)
+      assert is_binary(code)
+    end
+
     test "sourcemap works with minify" do
       files = [
         {"a.ts", "export const x = 1;"},

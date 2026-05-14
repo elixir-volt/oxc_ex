@@ -1193,7 +1193,7 @@ dependencies = [
  "oxc_span 0.95.0",
  "oxc_syntax 0.95.0",
  "oxc_transformer 0.95.0",
- "oxc_transformer_plugins 0.95.0",
+ "oxc_transformer_plugins",
 ]
 
 [[package]]
@@ -1549,14 +1549,12 @@ dependencies = [
  "oxc_diagnostics 0.129.0",
  "oxc_minifier 0.129.0",
  "oxc_parser 0.129.0",
- "oxc_resolver",
  "oxc_semantic 0.129.0",
  "oxc_sourcemap",
  "oxc_span 0.129.0",
  "oxc_str",
  "oxc_syntax 0.129.0",
  "oxc_transformer 0.129.0",
- "oxc_transformer_plugins 0.129.0",
  "rayon",
  "rolldown",
  "rolldown_common",
@@ -2006,29 +2004,6 @@ dependencies = [
  "oxc_syntax 0.95.0",
  "oxc_transformer 0.95.0",
  "oxc_traverse 0.95.0",
- "rustc-hash",
-]
-
-[[package]]
-name = "oxc_transformer_plugins"
-version = "0.129.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f3801044dfa436a5c6d79de850ccf93ef4975e9450fe4aeb94c878466533783"
-dependencies = [
- "cow-utils",
- "itoa",
- "oxc_allocator 0.129.0",
- "oxc_ast 0.129.0",
- "oxc_ast_visit 0.129.0",
- "oxc_diagnostics 0.129.0",
- "oxc_ecmascript 0.129.0",
- "oxc_parser 0.129.0",
- "oxc_semantic 0.129.0",
- "oxc_span 0.129.0",
- "oxc_str",
- "oxc_syntax 0.129.0",
- "oxc_transformer 0.129.0",
- "oxc_traverse 0.129.0",
  "rustc-hash",
 ]
 

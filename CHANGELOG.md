@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.13.0
+
+### Added
+
+- `module_types` option for `OXC.bundle/2` — map file extensions to loaders (`:empty`, `:dataurl`, `:base64`, `:binary`, `:text`, `:css`, `:asset`, etc.). Unblocks bundling packages that import binary files like fonts from CSS.
+
+### Changed
+
+- Upgraded OXC crates from 0.129 to 0.130.
+- Removed unused Cargo dependencies (`oxc_resolver`, `oxc_transformer_plugins`).
+- `mix lint` / `mix ci` now checks clippy and rustfmt for all three NIF crates.
+
+### Fixed
+
+- Resolved all clippy warnings under `-D warnings`.
+
 ## 0.12.1
 
 ### Fixed

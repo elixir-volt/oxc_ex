@@ -524,6 +524,23 @@ defmodule OXC.BundleTest do
       assert js =~ "browser-build"
       refute js =~ "server-build"
     end
+
+    test "module_types treats extensions as specified loader" do
+      files = [
+        {"main.js", "import './style.css'\nimport font from './font.ttf'\nconsole.log(font)"},
+        {"style.css", ".body { color: red }"},
+        {"font.ttf", "fake-binary-font-data"}
+      ]
+
+      {:ok, js} =
+        OXC.bundle(files,
+          entry: "main.js",
+          module_types: %{".css" => "empty", ".ttf" => "dataurl"}
+        )
+
+      refute js =~ "color: red"
+      assert js =~ "data:"
+    end
   end
 
   defp tmp_dir(name) do

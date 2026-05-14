@@ -415,6 +415,10 @@ defmodule OXC do
     * `:jsx_fragment` — fragment for classic JSX (default: `"React.Fragment"`)
     * `:import_source` — JSX import source (e.g. `"vue"`, `"preact"`)
     * `:target` — downlevel target (e.g. `"es2019"`, `"chrome80"`)
+    * `:module_types` — map of file extension to loader type, e.g.
+      `%{".css" => :empty, ".ttf" => :dataurl}`. Supported loaders:
+      `:js`, `:jsx`, `:ts`, `:tsx`, `:json`, `:text`, `:base64`,
+      `:dataurl`, `:binary`, `:empty`, `:css`, `:asset`.
 
   ## Examples
 
@@ -492,6 +496,7 @@ defmodule OXC do
       "footer" => Keyword.get(opts, :footer),
       "preamble" => Keyword.get(opts, :preamble),
       "define" => Keyword.get(opts, :define, %{}),
+      "module_types" => normalize_module_types(Keyword.get(opts, :module_types, %{})),
       "external" => Keyword.get(opts, :external, []),
       "preserve_entry_signatures" =>
         normalize_preserve_entry_signatures(Keyword.get(opts, :preserve_entry_signatures, nil)),
@@ -513,6 +518,10 @@ defmodule OXC do
   defp normalize_preserve_entry_signatures(value) when is_atom(value), do: Atom.to_string(value)
   defp normalize_preserve_entry_signatures(value) when is_binary(value), do: value
   defp normalize_preserve_entry_signatures(_value), do: ""
+
+  defp normalize_module_types(types) when is_map(types) do
+    Map.new(types, fn {ext, loader} -> {to_string(ext), to_string(loader)} end)
+  end
 
   defp normalize_jsx_runtime(runtime) when is_atom(runtime), do: Atom.to_string(runtime)
   defp normalize_jsx_runtime(runtime) when is_binary(runtime), do: runtime

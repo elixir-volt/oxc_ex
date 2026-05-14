@@ -12,7 +12,8 @@ use rolldown::{
     PreserveEntrySignatures, RawMinifyOptions, RawMinifyOptionsDetailed,
     ResolveOptions as RolldownResolveOptions, SourceMapType, TreeshakeOptions,
 };
-use rolldown_common::Output;
+use rolldown_common::{ModuleType, Output};
+use rustc_hash::FxHashMap;
 use rustler::{Encoder, Env, NifResult, SerdeTerm, Term};
 use serde::Serialize;
 use serde_json::Value;
@@ -240,12 +241,28 @@ fn build_bundle_options(
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect()
         }),
+        module_types: parse_module_types(&opts.module_types),
         resolve: Some(build_rolldown_resolve_options(opts)),
         transform: Some(build_rolldown_transform_options(opts)),
         treeshake: TreeshakeOptions::Boolean(opts.treeshake),
         minify: opts.minify.then(|| build_minify_options(opts.drop_console)),
         ..BundlerOptions::default()
     }
+}
+
+fn parse_module_types(
+    types: &std::collections::BTreeMap<String, String>,
+) -> Option<FxHashMap<String, ModuleType>> {
+    if types.is_empty() {
+        return None;
+    }
+    let mut map = FxHashMap::default();
+    for (ext, loader) in types {
+        if let Ok(module_type) = ModuleType::from_known_str(loader) {
+            map.insert(ext.clone(), module_type);
+        }
+    }
+    Some(map)
 }
 
 fn parse_output_exports(exports: &str) -> Option<OutputExports> {

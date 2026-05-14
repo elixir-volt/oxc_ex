@@ -79,6 +79,7 @@ pub struct BundleOptions {
     pub footer: Option<String>,
     pub preamble: Option<String>,
     pub define: BTreeMap<String, String>,
+    pub module_types: BTreeMap<String, String>,
     pub external: Vec<String>,
     pub preserve_entry_signatures: String,
     pub conditions: Vec<String>,

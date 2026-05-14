@@ -57,7 +57,11 @@ defmodule OXC.MixProject do
         "ex_dna",
         "dialyzer",
         "cmd cargo fmt --manifest-path native/oxc_ex_nif/Cargo.toml -- --check",
-        "cmd cargo clippy --manifest-path native/oxc_ex_nif/Cargo.toml -- -D warnings"
+        "cmd cargo fmt --manifest-path native/oxc_fmt_nif/Cargo.toml -- --check",
+        "cmd cargo fmt --manifest-path native/oxc_lint_nif/Cargo.toml -- --check",
+        "cmd cargo clippy --manifest-path native/oxc_ex_nif/Cargo.toml -- -D warnings",
+        "cmd cargo clippy --manifest-path native/oxc_fmt_nif/Cargo.toml -- -D warnings",
+        "cmd cargo clippy --manifest-path native/oxc_lint_nif/Cargo.toml -- -D warnings"
       ],
       ci: ["lint", "cmd OXC_EX_BUILD=1 MIX_ENV=test mix test"]
     ]

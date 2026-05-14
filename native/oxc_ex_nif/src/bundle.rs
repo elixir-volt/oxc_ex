@@ -401,7 +401,7 @@ fn run_rolldown(
             .map
             .as_ref()
             .map(oxc_sourcemap::SourceMap::to_json_string)
-            .map(|json| relativize_sourcemap_sources(json, &cwd))
+            .map(|json| relativize_sourcemap_sources(json, cwd))
             .transpose()?
     } else {
         None

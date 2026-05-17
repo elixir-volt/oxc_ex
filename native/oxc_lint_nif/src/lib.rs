@@ -74,7 +74,7 @@ fn parse_severity(s: &str) -> AllowWarnDeny {
 
 struct LintConfig {
     config_store: ConfigStore,
-    rule_severities: Vec<(String, AllowWarnDeny)>,
+    rule_severity_map: std::collections::HashMap<String, AllowWarnDeny>,
 }
 
 fn build_lint_config(plugins: &[String], rules: &[(String, String)]) -> Result<LintConfig, String> {
@@ -87,8 +87,6 @@ fn build_lint_config(plugins: &[String], rules: &[(String, String)]) -> Result<L
     let mut external_plugin_store = ExternalPluginStore::default();
     let mut builder = ConfigStoreBuilder::default().with_builtin_plugins(lint_plugins);
 
-    let mut rule_severities: Vec<(String, AllowWarnDeny)> = Vec::with_capacity(rules.len());
-
     for (rule_name, severity_str) in rules {
         let severity = parse_severity(severity_str.as_str());
         let filter_kind = LintFilterKind::parse(std::borrow::Cow::Owned(rule_name.clone()))
@@ -96,26 +94,32 @@ fn build_lint_config(plugins: &[String], rules: &[(String, String)]) -> Result<L
         let filter = LintFilter::new(severity, filter_kind)
             .map_err(|e| format!("Invalid lint filter '{rule_name}': {e}"))?;
         builder = builder.with_filters([&filter]);
-        rule_severities.push((rule_name.clone(), severity));
     }
 
     let config = builder
         .build(&mut external_plugin_store)
         .map_err(|e| format!("Failed to build linter config: {e}"))?;
 
+    let rule_severity_map = config
+        .rules()
+        .iter()
+        .map(|(rule, severity)| (format_rule_enum_name(rule), *severity))
+        .collect();
+
     Ok(LintConfig {
         config_store: ConfigStore::new(config, Default::default(), external_plugin_store),
-        rule_severities,
+        rule_severity_map,
     })
 }
 
-fn resolve_severity(rule_name: &str, rule_severities: &[(String, AllowWarnDeny)]) -> AllowWarnDeny {
-    for (name, severity) in rule_severities.iter().rev() {
-        if rule_name.contains(name.as_str()) {
-            return *severity;
-        }
+fn format_rule_enum_name(rule: &oxc_linter::rules::RuleEnum) -> String {
+    let name = rule.name();
+    let plugin = rule.plugin_name();
+    if plugin == "eslint" {
+        format!("eslint({name})")
+    } else {
+        format!("{plugin}({name})")
     }
-    AllowWarnDeny::Warn
 }
 
 fn format_rule_name(code: &oxc_diagnostics::OxcCode) -> String {
@@ -184,7 +188,10 @@ fn lint<'a>(
         .iter()
         .map(|msg| {
             let full_rule = format_rule_name(&msg.error.code);
-            let severity = resolve_severity(&full_rule, &lint_config.rule_severities);
+            let severity = lint_config.rule_severity_map
+                .get(&full_rule)
+                .copied()
+                .unwrap_or(AllowWarnDeny::Warn);
 
             Diagnostic {
                 rule: full_rule,

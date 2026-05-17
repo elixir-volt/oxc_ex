@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Lint category filters (e.g. `"correctness" => :deny`) now return the configured severity instead of always `:warn`.
+
 ## 0.13.0
 
 ### Added

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.15.0
+
+### Added
+
+- `OXC.Lint.run/2` supports file-list type-aware linting through `tsgolint` headless mode with `type_aware: true`.
+- Type-aware linting supports `type_check`, `source_overrides`, fixes, suggestions, and normalized diagnostics.
+
 ## 0.14.0
 
 ### Added

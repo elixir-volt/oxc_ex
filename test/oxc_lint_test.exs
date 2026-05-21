@@ -124,9 +124,113 @@ defmodule OXC.LintTest do
       assert diag.labels == [{4, 12}]
     end
 
+    test "runs tsgolint headless with encoded payload and normalizes diagnostics" do
+      tmp_dir =
+        Path.join(System.tmp_dir!(), "oxc-type-aware-#{System.unique_integer([:positive])}")
+
+      File.mkdir_p!(tmp_dir)
+      on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+      executable = fake_tsgolint(tmp_dir)
+      file = Path.join(tmp_dir, "app.ts")
+      File.write!(file, "async function save() {}\nsave()\n")
+
+      assert {:ok, [%OXC.Lint.TypeAware.Diagnostic{} = diag]} =
+               OXC.Lint.run([file],
+                 type_aware: true,
+                 tsgolint: executable,
+                 type_check: true,
+                 fix: true,
+                 fix_suggestions: true,
+                 source_overrides: %{file => "save()"},
+                 rules: %{
+                   "typescript/no-floating-promises" => {:deny, %{ignoreVoid: true}}
+                 }
+               )
+
+      assert diag.rule == "typescript/no-floating-promises"
+      assert diag.severity == :deny
+      assert diag.file == file
+      assert diag.span == {1, 5}
+
+      payload = tmp_dir |> Path.join("payload.json") |> File.read!() |> Jason.decode!()
+      argv = tmp_dir |> Path.join("argv.json") |> File.read!() |> Jason.decode!()
+
+      assert argv == ["headless", "-fix-suggestions", "-fix"]
+      assert payload["version"] == 2
+      assert payload["report_syntactic"] == true
+      assert payload["report_semantic"] == true
+      assert payload["source_overrides"] == %{file => "save()"}
+      assert [%{"file_paths" => [^file], "rules" => [rule]}] = payload["configs"]
+      assert rule == %{"name" => "no-floating-promises", "options" => %{"ignoreVoid" => true}}
+    end
+
+    test "parses multiple diagnostic frames and ignores timing frames" do
+      first = frame(1, Jason.encode!(diagnostic_payload("no-floating-promises", 1, 2)))
+      timing = frame(2, Jason.encode!(%{"rules" => []}))
+      second = frame(1, Jason.encode!(diagnostic_payload("no-misused-promises", 3, 4)))
+
+      assert {:ok, [first_diag, second_diag]} =
+               OXC.Lint.TypeAware.parse_output(first <> timing <> second, %{
+                 "no-floating-promises" => :deny,
+                 "no-misused-promises" => :warn
+               })
+
+      assert first_diag.rule == "typescript/no-floating-promises"
+      assert first_diag.severity == :deny
+      assert second_diag.rule == "typescript/no-misused-promises"
+      assert second_diag.severity == :warn
+    end
+
     test "parses tsgolint error frames" do
       frame = frame(0, Jason.encode!(%{"error" => "boom"}))
       assert {:error, ["boom"]} = OXC.Lint.TypeAware.parse_output(frame)
+    end
+
+    test "ignores truncated trailing frames after valid diagnostics" do
+      valid = frame(1, Jason.encode!(diagnostic_payload("no-floating-promises", 1, 2)))
+
+      assert {:ok, [_diag]} =
+               OXC.Lint.TypeAware.parse_output(valid <> <<10::little-32, 1, "bad">>)
+    end
+
+    defp diagnostic_payload(rule, start, stop) do
+      %{
+        "kind" => 1,
+        "range" => %{"pos" => start, "end" => stop},
+        "rule" => rule,
+        "message" => %{"id" => rule, "description" => "diagnostic from #{rule}"},
+        "file_path" => "/tmp/app.ts",
+        "labeled_ranges" => [%{"label" => "label", "range" => %{"pos" => start, "end" => stop}}]
+      }
+    end
+
+    defp fake_tsgolint(tmp_dir) do
+      executable = Path.join(tmp_dir, "tsgolint")
+      payload_path = Path.join(tmp_dir, "payload.json")
+      argv_path = Path.join(tmp_dir, "argv.json")
+
+      File.write!(executable, """
+      #!/usr/bin/env python3
+      import json, struct, sys
+      payload = sys.stdin.read()
+      open(#{inspect(payload_path)}, "w").write(payload)
+      open(#{inspect(argv_path)}, "w").write(json.dumps(sys.argv[1:]))
+      data = json.loads(payload)
+      file_path = data["configs"][0]["file_paths"][0]
+      body = json.dumps({
+        "kind": 1,
+        "range": {"pos": 1, "end": 5},
+        "rule": "no-floating-promises",
+        "message": {"id": "no-floating-promises", "description": "Promise is not handled"},
+        "file_path": file_path,
+        "labeled_ranges": [{"label": "promise", "range": {"pos": 1, "end": 5}}]
+      }).encode()
+      sys.stdout.buffer.write(struct.pack("<IB", len(body), 1) + body)
+      """)
+
+      File.chmod!(executable, 0o755)
+      executable
     end
 
     defp frame(type, payload) do

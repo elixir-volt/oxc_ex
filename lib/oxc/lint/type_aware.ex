@@ -72,19 +72,32 @@ defmodule OXC.Lint.TypeAware do
   end
 
   defp run_tsgolint(executable, files, opts) do
-    payload = build_payload(files, opts)
+    payload_path = write_payload!(build_payload(files, opts))
     args = ["headless" | headless_flags(opts)]
 
-    case System.cmd(executable, args,
-           input: Jason.encode!(payload),
-           cd: Keyword.get(opts, :cwd, File.cwd!()),
-           stderr_to_stdout: false
-         ) do
-      {output, 0} -> {:ok, output}
-      {output, _status} -> parse_output(output, severity_by_rule(opts))
+    try do
+      command_args = ["sh", payload_path, executable | args]
+
+      case System.cmd(
+             "sh",
+             ["-c", "payload=$1; shift; exec \"$@\" < \"$payload\"" | command_args],
+             cd: Keyword.get(opts, :cwd, File.cwd!()),
+             stderr_to_stdout: false
+           ) do
+        {output, 0} -> {:ok, output}
+        {output, _status} -> parse_output(output, severity_by_rule(opts))
+      end
+    after
+      File.rm(payload_path)
     end
   rescue
     exception -> {:error, [Exception.message(exception)]}
+  end
+
+  defp write_payload!(payload) do
+    path = Path.join(System.tmp_dir!(), "oxc-tsgolint-#{System.unique_integer([:positive])}.json")
+    File.write!(path, Jason.encode!(payload))
+    path
   end
 
   defp build_payload(files, opts) do

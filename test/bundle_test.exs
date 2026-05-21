@@ -13,6 +13,14 @@ defmodule OXC.BundleTest do
       refute js =~ "export "
     end
 
+    test "accepts iodata virtual file sources" do
+      files = [{"a.ts", ["export const x", ": number = 1;"]}]
+      {:ok, js} = OXC.bundle(files, entry: "a.ts", format: :esm)
+
+      assert js =~ "const x = 1"
+      refute js =~ "number"
+    end
+
     test "strips TypeScript and resolves local imports" do
       files = [
         {"a.ts", "export const x: number = 1;"},

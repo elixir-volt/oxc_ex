@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- Source-taking APIs now accept `iodata()` across parse, transform, minify, import collection, lint, format, source patching, and virtual bundle inputs.
+
+### Changed
+
+- `OXC.patch_string/2` now builds patched output with iodata internally before flattening once.
+
 ### Fixed
 
 - Lint category filters (e.g. `"correctness" => :deny`) now return the configured severity instead of always `:warn`.

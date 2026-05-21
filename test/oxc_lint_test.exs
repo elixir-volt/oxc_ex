@@ -16,6 +16,11 @@ defmodule OXC.LintTest do
       assert diag.severity == :deny
     end
 
+    test "accepts iodata source" do
+      {:ok, diags} = OXC.Lint.run(["debug", "ger;"], "test.js", rules: %{"no-debugger" => :deny})
+      assert Enum.any?(diags, &(&1.rule =~ "no-debugger"))
+    end
+
     test "returns empty list for clean code" do
       {:ok, diags} = OXC.Lint.run("export const x = 1;\n", "test.ts")
       assert diags == []

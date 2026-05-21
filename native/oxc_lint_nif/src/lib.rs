@@ -9,7 +9,7 @@ use oxc_linter::{
 use oxc_parser::{ParseOptions, Parser};
 use oxc_semantic::SemanticBuilder;
 use oxc_span::SourceType;
-use rustler::{Encoder, Env, NifMap, NifResult, Term};
+use rustler::{Binary, Encoder, Env, Error, NifMap, NifResult, Term};
 
 mod atoms {
     rustler::atoms! {
@@ -134,15 +134,25 @@ fn format_rule_name(code: &oxc_diagnostics::OxcCode) -> String {
     }
 }
 
+fn source_from_term<'a>(term: Term<'a>) -> NifResult<Binary<'a>> {
+    term.decode_as_binary()
+}
+
+fn binary_to_str<'a, 'b>(binary: &'b Binary<'a>) -> NifResult<&'b str> {
+    std::str::from_utf8(binary).map_err(|_| Error::BadArg)
+}
+
 #[rustler::nif(schedule = "DirtyCpu")]
 fn lint<'a>(
     env: Env<'a>,
-    source: &str,
+    source_term: Term<'a>,
     filename: &str,
     plugins: Vec<String>,
     rules: Vec<(String, String)>,
     fix: bool,
 ) -> NifResult<Term<'a>> {
+    let source_binary = source_from_term(source_term)?;
+    let source = binary_to_str(&source_binary)?;
     let path = Path::new(filename);
     let source_type = SourceType::from_path(path).unwrap_or_default();
 
@@ -188,7 +198,8 @@ fn lint<'a>(
         .iter()
         .map(|msg| {
             let full_rule = format_rule_name(&msg.error.code);
-            let severity = lint_config.rule_severity_map
+            let severity = lint_config
+                .rule_severity_map
                 .get(&full_rule)
                 .copied()
                 .unwrap_or(AllowWarnDeny::Warn);

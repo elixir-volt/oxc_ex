@@ -7,6 +7,11 @@ defmodule OXC.FormatTest do
       assert code == "const x = 1;\nlet y = 2;\n"
     end
 
+    test "accepts iodata source" do
+      {:ok, code} = OXC.Format.run(["const   ", "x=1;"], "test.js")
+      assert code == "const x = 1;\n"
+    end
+
     test "formats TypeScript" do
       {:ok, code} = OXC.Format.run("const x:number=42", "test.ts")
       assert code == "const x: number = 42;\n"

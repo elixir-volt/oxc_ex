@@ -761,6 +761,36 @@ defmodule OXCTest do
     end
   end
 
+  describe "iodata inputs" do
+    test "source APIs accept iodata" do
+      source = ["const ", [?x], " = ", [?1], ";"]
+
+      assert {:ok, %{type: :program}} = OXC.parse(source, "test.js")
+      assert OXC.valid?(source, "test.js")
+      assert {:ok, js} = OXC.transform(["const x", ": number = 1"], "test.ts")
+      assert js == "const x = 1;\n"
+      assert {:ok, min} = OXC.minify(["const x = ", "1 + 2;"], "test.js")
+      assert min =~ "const"
+      assert {:ok, ["vue"]} = OXC.imports(["import { ref } ", "from 'vue'"], "test.js")
+
+      assert {:ok, [%{specifier: "vue"}]} =
+               OXC.collect_imports(["import { ref } ", "from 'vue'"], "test.js")
+    end
+
+    test "batch and patch APIs accept iodata" do
+      assert [{:ok, "const x = 1;\n"}] =
+               OXC.transform_many([{["const x", ": number = 1"], "test.ts"}])
+
+      assert {:ok, "import { ref } from '/@vendor/vue.js'"} =
+               OXC.rewrite_specifiers(["import { ref } ", "from 'vue'"], "test.js", fn "vue" ->
+                 {:rewrite, ["/@vendor/", "vue", ".js"]}
+               end)
+
+      assert OXC.patch_string(["hello", " world"], [%{start: 6, end: 11, change: ["el", "ixir"]}]) ==
+               "hello elixir"
+    end
+  end
+
   defp collect_messages(tag) do
     collect_messages(tag, [])
   end

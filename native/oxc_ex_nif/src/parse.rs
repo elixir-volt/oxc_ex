@@ -7,7 +7,7 @@ use oxc_parser::{ParseOptions, Parser};
 use oxc_semantic::SemanticBuilder;
 use oxc_span::SourceType;
 use oxc_transformer::{EnvOptions, JsxRuntime, TransformOptions, Transformer};
-use rustler::{Encoder, Env, NifResult, SerdeTerm, Term};
+use rustler::{Binary, Encoder, Env, Error, NifResult, SerdeTerm, Term};
 use serde::Serialize;
 use serde_json::Value;
 use std::path::Path;
@@ -25,6 +25,14 @@ fn parser_options() -> ParseOptions {
 
 fn encode_ok<'a, T: Serialize>(env: Env<'a>, value: T) -> NifResult<Term<'a>> {
     Ok((atoms::ok(), SerdeTerm(value)).encode(env))
+}
+
+pub fn source_from_term<'a>(term: Term<'a>) -> NifResult<Binary<'a>> {
+    term.decode_as_binary()
+}
+
+pub fn binary_to_str<'a, 'b>(binary: &'b Binary<'a>) -> NifResult<&'b str> {
+    std::str::from_utf8(binary).map_err(|_| Error::BadArg)
 }
 
 #[derive(Serialize)]
@@ -145,7 +153,9 @@ pub fn transform_source(source: &str, filename: &str, opts: &TransformInput) -> 
 // -- NIF entry points --
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn parse<'a>(env: Env<'a>, source: &str, filename: &str) -> NifResult<Term<'a>> {
+pub fn parse<'a>(env: Env<'a>, source_term: Term<'a>, filename: &str) -> NifResult<Term<'a>> {
+    let source_binary = source_from_term(source_term)?;
+    let source = binary_to_str(&source_binary)?;
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(filename).unwrap_or_default();
     let ret = Parser::new(&allocator, source, source_type)
@@ -170,20 +180,24 @@ pub fn parse<'a>(env: Env<'a>, source: &str, filename: &str) -> NifResult<Term<'
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn valid(source: &str, filename: &str) -> bool {
+pub fn valid(source_term: Term<'_>, filename: &str) -> NifResult<bool> {
+    let source_binary = source_from_term(source_term)?;
+    let source = binary_to_str(&source_binary)?;
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(filename).unwrap_or_default();
     let ret = Parser::new(&allocator, source, source_type).parse();
-    ret.errors.is_empty()
+    Ok(ret.errors.is_empty())
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn transform<'a>(
     env: Env<'a>,
-    source: &str,
+    source_term: Term<'a>,
     filename: &str,
     opts_term: Term<'a>,
 ) -> NifResult<Term<'a>> {
+    let source_binary = source_from_term(source_term)?;
+    let source = binary_to_str(&source_binary)?;
     let opts = decode_options::<TransformInput>(opts_term);
     Ok(transform_source(source, filename, &opts).to_term(env))
 }
@@ -191,10 +205,12 @@ pub fn transform<'a>(
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn minify<'a>(
     env: Env<'a>,
-    source: &str,
+    source_term: Term<'a>,
     filename: &str,
     opts_term: Term<'a>,
 ) -> NifResult<Term<'a>> {
+    let source_binary = source_from_term(source_term)?;
+    let source = binary_to_str(&source_binary)?;
     let opts = decode_options::<MinifyInput>(opts_term);
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(filename).unwrap_or_default();

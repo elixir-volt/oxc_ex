@@ -130,7 +130,9 @@ defmodule OXC.CodegenTest do
     end
 
     test "roundtrips class with methods" do
-      source = "class Dog extends Animal {\n\tconstructor(name) {\n\t\tsuper(name);\n\t}\n\tbark() {\n\t\treturn \"woof\";\n\t}\n}\n"
+      source =
+        "class Dog extends Animal {\n\tconstructor(name) {\n\t\tsuper(name);\n\t}\n\tbark() {\n\t\treturn \"woof\";\n\t}\n}\n"
+
       {:ok, ast} = OXC.parse(source, "test.js")
       {:ok, js} = OXC.codegen(ast)
       assert js =~ "class Dog extends Animal"
@@ -267,6 +269,12 @@ defmodule OXC.CodegenTest do
       assert OXC.codegen!(ast) =~ "const count = ref(0)"
     end
 
+    test "substitutes iodata identifiers and expressions" do
+      {:ok, ast} = OXC.parse("const $name = $init", "t.js")
+      ast = OXC.bind(ast, name: ["co", "unt"], init: {:expr, ["ref", "(0)"]})
+      assert OXC.codegen!(ast) =~ "const count = ref(0)"
+    end
+
     test "substitutes complex expressions" do
       {:ok, ast} = OXC.parse("const x = $val", "t.js")
       ast = OXC.bind(ast, val: {:expr, "a > 0 ? a : -a"})
@@ -319,6 +327,15 @@ defmodule OXC.CodegenTest do
       js =
         OXC.parse!("function f() { $action }", "t.js")
         |> OXC.splice(:action, "return 42;")
+        |> OXC.codegen!()
+
+      assert js =~ "return 42"
+    end
+
+    test "splices iodata statement items" do
+      js =
+        OXC.parse!("function f() { $action }", "t.js")
+        |> OXC.splice(:action, [["return ", "42;"]])
         |> OXC.codegen!()
 
       assert js =~ "return 42"
@@ -389,7 +406,8 @@ defmodule OXC.CodegenTest do
     end
 
     test "full pipeline with bind and splice" do
-      template = ~s|import { z } from "zod";\nexport const $schema = z.object({$fields});\n$actions\n|
+      template =
+        ~s|import { z } from "zod";\nexport const $schema = z.object({$fields});\n$actions\n|
 
       fields = ["id: z.string().uuid()", "name: z.string()"]
 

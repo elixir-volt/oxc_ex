@@ -23,6 +23,7 @@ use tokio::runtime::Builder as RuntimeBuilder;
 use crate::atoms;
 use crate::error::error_to_term;
 use crate::options::{decode_options, BundleOptions};
+use crate::parse::{binary_to_str, source_from_term};
 
 #[derive(Serialize)]
 struct CodeWithSourcemap {
@@ -413,10 +414,18 @@ fn run_rolldown(
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn bundle<'a>(
     env: Env<'a>,
-    files: Vec<(String, String)>,
+    files: Vec<(String, Term<'a>)>,
     opts_term: Term<'a>,
 ) -> NifResult<Term<'a>> {
     let opts = decode_options::<BundleOptions>(opts_term);
+    let files = files
+        .into_iter()
+        .map(|(filename, source_term)| {
+            let source_binary = source_from_term(source_term)?;
+            let source = binary_to_str(&source_binary)?.to_owned();
+            Ok((filename, source))
+        })
+        .collect::<NifResult<Vec<_>>>()?;
 
     match bundle_virtual_project(files, &opts) {
         Ok((code, Some(sourcemap))) => Ok((

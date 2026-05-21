@@ -64,8 +64,9 @@ defmodule OXC.Lint do
         custom_rules: [{MyApp.NoConsoleLog, :warn}]
       )
   """
-  @spec run(String.t(), String.t(), keyword()) :: {:ok, [diagnostic()]} | {:error, [String.t()]}
+  @spec run(iodata(), String.t(), keyword()) :: {:ok, [diagnostic()]} | {:error, [String.t()]}
   def run(source, filename, opts \\ []) do
+    source = IO.iodata_to_binary(source)
     plugins = opts |> Keyword.get(:plugins, []) |> Enum.map(&to_string/1)
     fix = Keyword.get(opts, :fix, false)
 
@@ -95,7 +96,7 @@ defmodule OXC.Lint do
   @doc """
   Like `run/3` but raises on errors.
   """
-  @spec run!(String.t(), String.t(), keyword()) :: [diagnostic()]
+  @spec run!(iodata(), String.t(), keyword()) :: [diagnostic()]
   def run!(source, filename, opts \\ []) do
     case run(source, filename, opts) do
       {:ok, diags} ->

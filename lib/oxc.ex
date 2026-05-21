@@ -14,9 +14,9 @@ defmodule OXC do
       iex> js
       "const x = 42;\\n"
 
-  AST nodes are maps with atom keys, following the ESTree specification.
-  The `:type` and `:kind` field values are snake_case atoms
-  (e.g. `:import_declaration`, `:variable_declaration`).
+  Source-taking APIs accept binaries and iodata. AST nodes are maps with atom
+  keys, following the ESTree specification. The `:type` and `:kind` field values
+  are snake_case atoms (e.g. `:import_declaration`, `:variable_declaration`).
   """
 
   defmodule Error do
@@ -26,6 +26,7 @@ defmodule OXC do
     def message(%{message: message}), do: message
   end
 
+  @type source :: iodata()
   @type ast :: %{required(:type) => atom(), optional(atom()) => any()}
   @type error :: %{message: String.t()}
   @type code_with_sourcemap :: %{code: String.t(), sourcemap: String.t()}
@@ -56,7 +57,7 @@ defmodule OXC do
       iex> is_binary(msg)
       true
   """
-  @spec parse(String.t(), String.t()) :: parse_result()
+  @spec parse(source(), String.t()) :: parse_result()
   def parse(source, filename) do
     case OXC.Native.parse(source, filename) do
       {:ok, ast} -> {:ok, atomize_term_keys(ast)}
@@ -73,7 +74,7 @@ defmodule OXC do
       iex> ast.type
       :program
   """
-  @spec parse!(String.t(), String.t()) :: ast()
+  @spec parse!(source(), String.t()) :: ast()
   def parse!(source, filename) do
     case parse(source, filename) do
       {:ok, ast} ->
@@ -97,7 +98,7 @@ defmodule OXC do
       iex> OXC.valid?("const = ;", "bad.js")
       false
   """
-  @spec valid?(String.t(), String.t()) :: boolean()
+  @spec valid?(source(), String.t()) :: boolean()
   def valid?(source, filename) do
     OXC.Native.valid(source, filename)
   end
@@ -128,7 +129,7 @@ defmodule OXC do
       iex> js =~ "createElement"
       true
   """
-  @spec transform(String.t(), String.t(), keyword()) :: transform_result()
+  @spec transform(source(), String.t(), keyword()) :: transform_result()
   def transform(source, filename, opts \\ []) do
     case OXC.Native.transform(source, filename, normalize_transform_options(opts)) do
       {:ok, result} -> {:ok, normalize_native_result(result)}
@@ -144,7 +145,7 @@ defmodule OXC do
       iex> OXC.transform!("const x: number = 42", "test.ts")
       "const x = 42;\\n"
   """
-  @spec transform!(String.t(), String.t(), keyword()) :: String.t() | code_with_sourcemap()
+  @spec transform!(source(), String.t(), keyword()) :: String.t() | code_with_sourcemap()
   def transform!(source, filename, opts \\ []) do
     case transform(source, filename, opts) do
       {:ok, code} ->
@@ -174,7 +175,7 @@ defmodule OXC do
       iex> code =~ "const x = 1"
       true
   """
-  @spec transform_many([{String.t(), String.t()}], keyword()) :: [transform_result()]
+  @spec transform_many([{source(), String.t()}], keyword()) :: [transform_result()]
   def transform_many(inputs, opts \\ []) do
     native_opts = normalize_transform_options(opts)
 
@@ -203,7 +204,7 @@ defmodule OXC do
       iex> min =~ "x()"
       false
   """
-  @spec minify(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [error()]}
+  @spec minify(source(), String.t(), keyword()) :: {:ok, String.t()} | {:error, [error()]}
   def minify(source, filename, opts \\ []) do
     case OXC.Native.minify(source, filename, normalize_minify_options(opts)) do
       {:ok, code} -> {:ok, code}
@@ -220,7 +221,7 @@ defmodule OXC do
       iex> is_binary(min)
       true
   """
-  @spec minify!(String.t(), String.t(), keyword()) :: String.t()
+  @spec minify!(source(), String.t(), keyword()) :: String.t()
   def minify!(source, filename, opts \\ []) do
     case minify(source, filename, opts) do
       {:ok, code} ->
@@ -244,7 +245,7 @@ defmodule OXC do
       iex> imports
       ["vue"]
   """
-  @spec imports(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, [error()]}
+  @spec imports(source(), String.t()) :: {:ok, [String.t()]} | {:error, [error()]}
   def imports(source, filename) do
     case OXC.Native.imports(source, filename) do
       {:ok, list} -> {:ok, list}
@@ -253,7 +254,7 @@ defmodule OXC do
   end
 
   @doc "Like `imports/2` but raises on errors."
-  @spec imports!(String.t(), String.t()) :: [String.t()]
+  @spec imports!(source(), String.t()) :: [String.t()]
   def imports!(source, filename) do
     case imports(source, filename) do
       {:ok, list} ->
@@ -288,7 +289,7 @@ defmodule OXC do
       iex> Enum.map(imports, & &1.kind)
       [:import, :export, :import]
   """
-  @spec collect_imports(String.t(), String.t()) ::
+  @spec collect_imports(source(), String.t()) ::
           {:ok,
            [
              %{
@@ -308,7 +309,7 @@ defmodule OXC do
   end
 
   @doc "Like `collect_imports/2` but raises on errors."
-  @spec collect_imports!(String.t(), String.t()) :: [map()]
+  @spec collect_imports!(source(), String.t()) :: [map()]
   def collect_imports!(source, filename) do
     case collect_imports(source, filename) do
       {:ok, list} ->
@@ -342,9 +343,11 @@ defmodule OXC do
       iex> result
       "import { ref } from '/@vendor/vue.js'\\nimport a from './utils'"
   """
-  @spec rewrite_specifiers(String.t(), String.t(), (String.t() -> {:rewrite, String.t()} | :keep)) ::
+  @spec rewrite_specifiers(source(), String.t(), (String.t() -> {:rewrite, iodata()} | :keep)) ::
           {:ok, String.t()} | {:error, [error()]}
   def rewrite_specifiers(source, filename, fun) when is_function(fun, 1) do
+    source = IO.iodata_to_binary(source)
+
     case collect_imports(source, filename) do
       {:ok, imports} ->
         patches =
@@ -365,7 +368,7 @@ defmodule OXC do
   @doc """
   Like `rewrite_specifiers/3` but raises on errors.
   """
-  @spec rewrite_specifiers!(String.t(), String.t(), (String.t() -> {:rewrite, String.t()} | :keep)) ::
+  @spec rewrite_specifiers!(source(), String.t(), (String.t() -> {:rewrite, iodata()} | :keep)) ::
           String.t()
   def rewrite_specifiers!(source, filename, fun) do
     case rewrite_specifiers(source, filename, fun) do
@@ -434,7 +437,7 @@ defmodule OXC do
       iex> String.contains?(js, "import ")
       false
   """
-  @spec bundle(String.t() | [{String.t(), String.t()}], keyword()) :: bundle_result()
+  @spec bundle(String.t() | [{String.t(), source()}], keyword()) :: bundle_result()
   def bundle(input, opts \\ [])
 
   def bundle(entry, opts) when is_binary(entry) do
@@ -458,7 +461,8 @@ defmodule OXC do
   @doc """
   Like `bundle/2` but raises on errors.
   """
-  @spec bundle!([{String.t(), String.t()}], keyword()) :: String.t() | code_with_sourcemap()
+  @spec bundle!(String.t() | [{String.t(), source()}], keyword()) ::
+          String.t() | code_with_sourcemap()
   def bundle!(files, opts \\ []) do
     case bundle(files, opts) do
       {:ok, result} ->
@@ -596,8 +600,11 @@ defmodule OXC do
   @spec codegen!(ast()) :: String.t()
   def codegen!(ast) do
     case codegen(ast) do
-      {:ok, code} -> code
-      {:error, errors} -> raise Error, message: "OXC codegen error: #{inspect(errors)}", errors: errors
+      {:ok, code} ->
+        code
+
+      {:error, errors} ->
+        raise Error, message: "OXC codegen error: #{inspect(errors)}", errors: errors
     end
   end
 
@@ -608,11 +615,11 @@ defmodule OXC do
   with the corresponding value from `bindings`.
 
   Binding values can be:
-    * A string — replaced as an identifier name
+    * A string or iodata — replaced as an identifier name
     * `{:literal, value}` — replaced with a literal node (string, number,
       boolean, nil, map, or list — maps and lists are converted recursively
       into JS object/array expressions)
-    * `{:expr, code}` — parsed as a JavaScript expression
+    * `{:expr, code}` — parsed as a JavaScript expression from a binary or iodata
     * A map with `:type` — spliced as a raw AST node
 
   ## Examples
@@ -645,8 +652,12 @@ defmodule OXC do
   end
 
   defp resolve_binding(value) when is_binary(value), do: {:rename, value}
+  defp resolve_binding(value) when is_list(value), do: {:rename, IO.iodata_to_binary(value)}
   defp resolve_binding({:literal, lit}), do: {:node, literal_to_ast(lit)}
-  defp resolve_binding({:expr, code}) when is_binary(code), do: {:node, parse_expression!(code)}
+
+  defp resolve_binding({:expr, code}) when is_binary(code) or is_list(code),
+    do: {:node, parse_expression!(code)}
+
   defp resolve_binding(%{type: _} = node), do: {:node, node}
 
   @doc """
@@ -654,7 +665,8 @@ defmodule OXC do
 
   Finds expression statements, shorthand object properties, or array elements
   whose identifier name starts with `$` and replaces them with the provided
-  nodes. Accepts a single item or a list. Strings are auto-parsed as JS.
+  nodes. Accepts a single item or a list. Strings and iodata items are
+  auto-parsed as JS.
 
   ## Examples
 
@@ -726,7 +738,9 @@ defmodule OXC do
     end)
   end
 
-  defp resolve_splice_statement(item) when is_binary(item) do
+  defp resolve_splice_statement(item) when is_binary(item) or is_list(item) do
+    item = IO.iodata_to_binary(item)
+
     case parse(item, "splice.js") do
       {:ok, %{body: [stmt]}} ->
         stmt
@@ -739,22 +753,24 @@ defmodule OXC do
 
   defp resolve_splice_statement(%{type: _} = node), do: node
 
-  defp resolve_splice_property(item) when is_binary(item) do
-    ast = parse!("({" <> item <> "})", "splice.js")
+  defp resolve_splice_property(item) when is_binary(item) or is_list(item) do
+    ast = parse!(["({", item, "})"], "splice.js")
     [%{type: :expression_statement, expression: expr}] = ast.body
-    props = case expr do
-      %{type: :parenthesized_expression, expression: %{properties: p}} -> p
-      %{type: :object_expression, properties: p} -> p
-      %{properties: p} -> p
-    end
+
+    props =
+      case expr do
+        %{type: :parenthesized_expression, expression: %{properties: p}} -> p
+        %{type: :object_expression, properties: p} -> p
+        %{properties: p} -> p
+      end
+
     [prop] = props
     prop
-
   end
 
   defp resolve_splice_property(%{type: _} = node), do: node
 
-  defp resolve_splice_element(item) when is_binary(item) do
+  defp resolve_splice_element(item) when is_binary(item) or is_list(item) do
     parse_expression!(item)
   end
 
@@ -813,7 +829,6 @@ defmodule OXC do
   defp deatomize_value(:type, value) when is_atom(value), do: value
   defp deatomize_value(:kind, value) when is_atom(value), do: value
   defp deatomize_value(_key, value), do: deatomize_ast(value)
-
 
   @doc """
   Walk an AST tree, calling `fun` on every node (any map with a `:type` key).
@@ -1012,13 +1027,13 @@ defmodule OXC do
 
   # ── Source Patching ──
 
-  @type patch :: %{start: non_neg_integer(), end: non_neg_integer(), change: String.t()}
+  @type patch :: %{start: non_neg_integer(), end: non_neg_integer(), change: iodata()}
 
   @doc """
   Apply patches to source code, like `Sourceror.patch_string/2`.
 
   Each patch is a map with `:start` (byte offset), `:end` (byte offset),
-  and `:change` (replacement string). Patches are applied in reverse
+  and `:change` (replacement iodata). Patches are applied in reverse
   offset order so that earlier patches don't shift later offsets.
 
   When multiple patches target the same `{start, end}` range, only the
@@ -1036,13 +1051,20 @@ defmodule OXC do
       iex> OXC.patch_string(source, [%{start: 20, end: 25, change: "'/@vendor/vue.js'"}])
       "import { ref } from '/@vendor/vue.js'"
   """
-  @spec patch_string(String.t(), [patch()]) :: String.t()
+  @spec patch_string(source(), [patch()]) :: String.t()
   def patch_string(source, patches) do
-    patches
-    |> Enum.uniq_by(fn %{start: s, end: e} -> {s, e} end)
-    |> Enum.sort_by(fn %{start: s} -> s end, :desc)
-    |> Enum.reduce(source, fn %{start: s, end: e, change: replacement}, acc ->
-      binary_part(acc, 0, s) <> replacement <> binary_part(acc, e, byte_size(acc) - e)
-    end)
+    source = IO.iodata_to_binary(source)
+
+    {chunks, offset} =
+      patches
+      |> Enum.uniq_by(fn %{start: s, end: e} -> {s, e} end)
+      |> Enum.sort_by(fn %{start: s} -> s end)
+      |> Enum.reduce({[], 0}, fn %{start: s, end: e, change: replacement}, {chunks, offset} ->
+        chunk = binary_part(source, offset, s - offset)
+        {[replacement, chunk | chunks], e}
+      end)
+
+    tail = binary_part(source, offset, byte_size(source) - offset)
+    IO.iodata_to_binary(Enum.reverse([tail | chunks]))
   end
 end

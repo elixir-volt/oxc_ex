@@ -22,6 +22,6 @@ defmodule OXC.Format.Native do
     ),
     version: version
 
-  @spec format(String.t(), String.t(), map()) :: {:ok, String.t()} | {:error, [String.t()]}
+  @spec format(iodata(), String.t(), map()) :: {:ok, String.t()} | {:error, [String.t()]}
   def format(_source, _filename, _opts), do: :erlang.nif_error(:nif_not_loaded)
 end

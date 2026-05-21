@@ -9,7 +9,7 @@ use oxc_formatter::{
 };
 use oxc_parser::Parser;
 use oxc_span::SourceType;
-use rustler::{Encoder, Env, NifResult, Term};
+use rustler::{Binary, Encoder, Env, Error, NifResult, Term};
 
 mod atoms {
     rustler::atoms! {
@@ -272,8 +272,23 @@ fn decode_sort_tailwindcss(m: Term) -> oxc_formatter::SortTailwindcssOptions {
     s
 }
 
+fn source_from_term<'a>(term: Term<'a>) -> NifResult<Binary<'a>> {
+    term.decode_as_binary()
+}
+
+fn binary_to_str<'a, 'b>(binary: &'b Binary<'a>) -> NifResult<&'b str> {
+    std::str::from_utf8(binary).map_err(|_| Error::BadArg)
+}
+
 #[rustler::nif(schedule = "DirtyCpu")]
-fn format<'a>(env: Env<'a>, source: &str, filename: &str, opts: Term<'a>) -> NifResult<Term<'a>> {
+fn format<'a>(
+    env: Env<'a>,
+    source_term: Term<'a>,
+    filename: &str,
+    opts: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let source_binary = source_from_term(source_term)?;
+    let source = binary_to_str(&source_binary)?;
     let path = Path::new(filename);
     let source_type = enable_jsx_source_type(SourceType::from_path(path).unwrap_or_default());
 

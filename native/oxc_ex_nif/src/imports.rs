@@ -8,6 +8,7 @@ use rustler::{Encoder, Env, NifMap, NifResult, Term};
 
 use crate::atoms;
 use crate::error::{error_to_term, format_errors};
+use crate::parse::{binary_to_str, source_from_term};
 
 #[derive(NifMap)]
 struct ImportInfo {
@@ -77,7 +78,9 @@ impl<'a> Visit<'a> for ImportCollector {
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn imports<'a>(env: Env<'a>, source: &str, filename: &str) -> NifResult<Term<'a>> {
+pub fn imports<'a>(env: Env<'a>, source_term: Term<'a>, filename: &str) -> NifResult<Term<'a>> {
+    let source_binary = source_from_term(source_term)?;
+    let source = binary_to_str(&source_binary)?;
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(filename).unwrap_or_default();
     let ret = Parser::new(&allocator, source, source_type).parse();
@@ -102,7 +105,13 @@ pub fn imports<'a>(env: Env<'a>, source: &str, filename: &str) -> NifResult<Term
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
-pub fn collect_imports<'a>(env: Env<'a>, source: &str, filename: &str) -> NifResult<Term<'a>> {
+pub fn collect_imports<'a>(
+    env: Env<'a>,
+    source_term: Term<'a>,
+    filename: &str,
+) -> NifResult<Term<'a>> {
+    let source_binary = source_from_term(source_term)?;
+    let source = binary_to_str(&source_binary)?;
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(filename).unwrap_or_default();
     let ret = Parser::new(&allocator, source, source_type).parse();

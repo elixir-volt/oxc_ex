@@ -106,7 +106,7 @@ defmodule OXC.Format do
       iex> String.contains?(code, "\\n")
       true
   """
-  @spec run(String.t(), String.t(), [option()]) ::
+  @spec run(iodata(), String.t(), [option()]) ::
           {:ok, String.t()} | {:error, [String.t()]}
   def run(source, filename, opts \\ []) do
     opts_map =
@@ -153,7 +153,7 @@ defmodule OXC.Format do
       iex> OXC.Format.run!("const   x=1", "test.js")
       "const x = 1;\\n"
   """
-  @spec run!(String.t(), String.t(), [option()]) :: String.t()
+  @spec run!(iodata(), String.t(), [option()]) :: String.t()
   def run!(source, filename, opts \\ []) do
     case run(source, filename, opts) do
       {:ok, code} ->

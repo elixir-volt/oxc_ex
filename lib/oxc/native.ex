@@ -21,32 +21,32 @@ defmodule OXC.Native do
     ),
     version: version
 
-  @spec parse(String.t(), String.t()) :: {:ok, map()} | {:error, list()}
+  @spec parse(iodata(), String.t()) :: {:ok, map()} | {:error, list()}
   def parse(_source, _filename), do: :erlang.nif_error(:nif_not_loaded)
 
-  @spec valid(String.t(), String.t()) :: boolean()
+  @spec valid(iodata(), String.t()) :: boolean()
   def valid(_source, _filename), do: :erlang.nif_error(:nif_not_loaded)
 
-  @spec transform(String.t(), String.t(), map()) :: {:ok, String.t() | map()} | {:error, list()}
+  @spec transform(iodata(), String.t(), map()) :: {:ok, String.t() | map()} | {:error, list()}
   def transform(_source, _filename, _opts), do: :erlang.nif_error(:nif_not_loaded)
 
-  @spec minify(String.t(), String.t(), map()) :: {:ok, String.t()} | {:error, list()}
+  @spec minify(iodata(), String.t(), map()) :: {:ok, String.t()} | {:error, list()}
   def minify(_source, _filename, _opts), do: :erlang.nif_error(:nif_not_loaded)
 
-  @spec bundle([{String.t(), String.t()}], map()) ::
+  @spec bundle([{String.t(), iodata()}], map()) ::
           {:ok, String.t() | map()} | {:error, [String.t()]}
   def bundle(_files, _opts), do: :erlang.nif_error(:nif_not_loaded)
 
   @spec bundle_entry(String.t(), map()) :: {:ok, String.t() | map()} | {:error, [String.t()]}
   def bundle_entry(_entry, _opts), do: :erlang.nif_error(:nif_not_loaded)
 
-  @spec imports(String.t(), String.t()) :: {:ok, [String.t()]} | {:error, [String.t()]}
+  @spec imports(iodata(), String.t()) :: {:ok, [String.t()]} | {:error, [String.t()]}
   def imports(_source, _filename), do: :erlang.nif_error(:nif_not_loaded)
 
-  @spec collect_imports(String.t(), String.t()) :: {:ok, [map()]} | {:error, [String.t()]}
+  @spec collect_imports(iodata(), String.t()) :: {:ok, [map()]} | {:error, [String.t()]}
   def collect_imports(_source, _filename), do: :erlang.nif_error(:nif_not_loaded)
 
-  @spec transform_many([{String.t(), String.t()}], map()) :: list()
+  @spec transform_many([{iodata(), String.t()}], map()) :: list()
   def transform_many(_inputs, _opts), do: :erlang.nif_error(:nif_not_loaded)
 
   @spec codegen(map()) :: {:ok, String.t()} | {:error, list()}

@@ -35,6 +35,8 @@ Building from source requires a Rust toolchain (`rustup` recommended).
 
 ## Usage
 
+Source-taking APIs accept binaries and `iodata()`.
+
 ### Parse
 
 ```elixir
@@ -98,8 +100,9 @@ js =
 ```
 
 Binding values can be:
-- A string — replaces the identifier name
+- A string or iodata — replaces the identifier name
 - `{:literal, value}` — replaces with a literal node (string, number, boolean, nil)
+- `{:expr, code}` — parses JavaScript expression code from a binary or iodata
 - A map with `:type` — splices a raw AST node
 
 ```elixir

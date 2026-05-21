@@ -28,6 +28,14 @@ defmodule OXC.Lint do
   @doc """
   Lint source code with oxlint's built-in rules and optional custom rules.
 
+  Pass a list of files with `type_aware: true` to run TypeScript type-aware
+  rules through `tsgolint` headless mode:
+
+      OXC.Lint.run(["lib/app.ts"],
+        type_aware: true,
+        tsgolint: "tsgolint",
+        rules: %{"typescript/no-floating-promises" => :deny})
+
   ## Options
 
     * `:rules` — map of rule names to severity (`:deny`, `:warn`, `:allow`).
@@ -64,7 +72,16 @@ defmodule OXC.Lint do
         custom_rules: [{MyApp.NoConsoleLog, :warn}]
       )
   """
+  @spec run([String.t()], keyword()) :: {:ok, [diagnostic()]} | {:error, [String.t()]}
   @spec run(iodata(), String.t(), keyword()) :: {:ok, [diagnostic()]} | {:error, [String.t()]}
+  def run(files, opts) when is_list(files) and is_list(opts) do
+    if Keyword.get(opts, :type_aware, false) do
+      OXC.Lint.TypeAware.run(files, opts)
+    else
+      {:error, ["OXC.Lint.run/2 with a file list requires type_aware: true"]}
+    end
+  end
+
   def run(source, filename, opts \\ []) do
     source = IO.iodata_to_binary(source)
     plugins = opts |> Keyword.get(:plugins, []) |> Enum.map(&to_string/1)

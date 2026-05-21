@@ -80,7 +80,8 @@ defmodule OXC.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.2", only: [:dev, :test], runtime: false},
-      {:reach, "~> 2.5", only: [:dev, :test], runtime: false}
+      {:reach, "~> 2.5", only: [:dev, :test], runtime: false},
+      {:jason, "~> 1.4"}
     ]
   end
 end

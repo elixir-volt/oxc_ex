@@ -89,6 +89,51 @@ defmodule OXC.LintTest do
     end
   end
 
+  describe "run/2 with type-aware rules" do
+    test "requires a tsgolint executable" do
+      assert {:error, [message]} =
+               OXC.Lint.run(["test.ts"],
+                 type_aware: true,
+                 tsgolint: "/definitely/missing/tsgolint"
+               )
+
+      assert message =~ "tsgolint executable not found"
+    end
+
+    test "parses tsgolint diagnostic frames" do
+      diagnostic = %{
+        "kind" => 1,
+        "range" => %{"pos" => 4, "end" => 12},
+        "rule" => "no-floating-promises",
+        "message" => %{"id" => "floating", "description" => "Promise is not handled"},
+        "file_path" => "/tmp/app.ts",
+        "labeled_ranges" => [%{"label" => "promise", "range" => %{"pos" => 4, "end" => 12}}]
+      }
+
+      frame = frame(1, Jason.encode!(diagnostic))
+
+      assert {:ok, [diag]} =
+               OXC.Lint.TypeAware.parse_output(frame, %{"no-floating-promises" => :deny})
+
+      assert %OXC.Lint.TypeAware.Diagnostic{} = diag
+      assert diag.rule == "typescript/no-floating-promises"
+      assert diag.message == "Promise is not handled"
+      assert diag.severity == :deny
+      assert diag.file == "/tmp/app.ts"
+      assert diag.span == {4, 12}
+      assert diag.labels == [{4, 12}]
+    end
+
+    test "parses tsgolint error frames" do
+      frame = frame(0, Jason.encode!(%{"error" => "boom"}))
+      assert {:error, ["boom"]} = OXC.Lint.TypeAware.parse_output(frame)
+    end
+
+    defp frame(type, payload) do
+      <<byte_size(payload)::little-32, type::unsigned-8, payload::binary>>
+    end
+  end
+
   describe "run/3 with custom Elixir rules" do
     defmodule NoConsoleLog do
       @behaviour OXC.Lint.Rule

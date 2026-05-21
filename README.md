@@ -204,6 +204,23 @@ Available plugins: `:react`, `:typescript`, `:unicorn`, `:import`, `:jsdoc`,
 `:jest`, `:vitest`, `:jsx_a11y`, `:nextjs`, `:react_perf`, `:promise`,
 `:node`, `:vue`, `:oxc`.
 
+#### Type-Aware Linting
+
+Run TypeScript type-aware rules through `tsgolint` headless mode by passing a
+file list and `type_aware: true`:
+
+```elixir
+{:ok, diags} = OXC.Lint.run(["lib/app.ts"],
+  type_aware: true,
+  tsgolint: "tsgolint",
+  type_check: true,
+  rules: %{"typescript/no-floating-promises" => :deny})
+```
+
+The `:tsgolint` option can be a native `tsgolint` executable or the npm shim
+from `oxlint-tsgolint`. `type_check: true` also reports TypeScript syntactic and
+semantic diagnostics.
+
 #### Custom Elixir Rules
 
 Write project-specific lint rules in Elixir using the same AST from `OXC.parse/2`:

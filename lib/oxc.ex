@@ -503,7 +503,7 @@ defmodule OXC do
       "module_types" => normalize_module_types(Keyword.get(opts, :module_types, %{})),
       "external" => Keyword.get(opts, :external, []),
       "preserve_entry_signatures" =>
-        normalize_preserve_entry_signatures(Keyword.get(opts, :preserve_entry_signatures, nil)),
+        normalize_preserve_entry_signatures(Keyword.get(opts, :preserve_entry_signatures)),
       "conditions" => Keyword.get(opts, :conditions, []),
       "main_fields" => Keyword.get(opts, :main_fields, []),
       "modules" => Keyword.get(opts, :modules, []),
@@ -682,7 +682,7 @@ defmodule OXC do
       iex> js =~ "b: 2" and js =~ "c: 3"
       true
   """
-  @spec splice(ast(), atom(), ast() | String.t() | [ast() | String.t()]) :: ast()
+  @spec splice(ast(), atom(), ast() | iodata() | [ast() | iodata()]) :: ast()
   def splice(ast, name, replacement) when is_atom(name) do
     placeholder = "$#{name}"
     items = List.wrap(replacement)

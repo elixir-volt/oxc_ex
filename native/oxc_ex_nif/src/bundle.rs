@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::fs;
+use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 
 use oxc95::minifier::{
@@ -14,7 +15,7 @@ use rolldown::{
 };
 use rolldown_common::{ModuleType, Output};
 use rustc_hash::FxHashMap;
-use rustler::{Encoder, Env, NifResult, SerdeTerm, Term};
+use rustler::{Binary, Encoder, Env, Error, ListIterator, NifResult, SerdeTerm, Term};
 use serde::Serialize;
 use serde_json::Value;
 use tempfile::TempDir;
@@ -23,7 +24,6 @@ use tokio::runtime::Builder as RuntimeBuilder;
 use crate::atoms;
 use crate::error::error_to_term;
 use crate::options::{decode_options, BundleOptions};
-use crate::parse::{binary_to_str, source_from_term};
 
 #[derive(Serialize)]
 struct CodeWithSourcemap {
@@ -53,9 +53,28 @@ fn normalize_virtual_path(path: &str) -> Result<PathBuf, String> {
     Ok(result)
 }
 
-fn write_virtual_project(
+fn write_iodata(term: Term<'_>, writer: &mut impl Write) -> NifResult<()> {
+    if term.is_binary() {
+        let binary = Binary::from_term(term)?;
+        writer.write_all(&binary).map_err(|_| Error::BadArg)?;
+    } else if term.is_empty_list() {
+    } else if term.is_list() {
+        let iter: ListIterator = term.decode()?;
+        for item in iter {
+            write_iodata(item, writer)?;
+        }
+    } else {
+        writer
+            .write_all(&[term.decode::<u8>()?])
+            .map_err(|_| Error::BadArg)?;
+    }
+
+    Ok(())
+}
+
+fn write_virtual_project<'a>(
     tempdir: &TempDir,
-    files: &[(String, String)],
+    files: &[(String, Term<'a>)],
 ) -> Result<Vec<String>, Vec<String>> {
     let mut written = BTreeSet::new();
 
@@ -81,8 +100,13 @@ fn write_virtual_project(
             }
         }
 
-        if let Err(error) = fs::write(&full_path, source) {
-            return Err(vec![format!("Failed to write {filename:?}: {error}")]);
+        let mut file = match fs::File::create(&full_path) {
+            Ok(file) => file,
+            Err(error) => return Err(vec![format!("Failed to write {filename:?}: {error}")]),
+        };
+
+        if write_iodata(*source, &mut file).is_err() {
+            return Err(vec![format!("Invalid iodata for {filename:?}")]);
         }
     }
 
@@ -290,8 +314,8 @@ fn explicit_external_specifiers(opts: &BundleOptions) -> Vec<String> {
     opts.external.clone()
 }
 
-fn bundle_virtual_project(
-    files: Vec<(String, String)>,
+fn bundle_virtual_project<'a>(
+    files: Vec<(String, Term<'a>)>,
     opts: &BundleOptions,
 ) -> Result<(String, Option<String>), Vec<String>> {
     if files.is_empty() {
@@ -418,14 +442,6 @@ pub fn bundle<'a>(
     opts_term: Term<'a>,
 ) -> NifResult<Term<'a>> {
     let opts = decode_options::<BundleOptions>(opts_term);
-    let files = files
-        .into_iter()
-        .map(|(filename, source_term)| {
-            let source_binary = source_from_term(source_term)?;
-            let source = binary_to_str(&source_binary)?.to_owned();
-            Ok((filename, source))
-        })
-        .collect::<NifResult<Vec<_>>>()?;
 
     match bundle_virtual_project(files, &opts) {
         Ok((code, Some(sourcemap))) => Ok((

@@ -9,6 +9,7 @@
 ### Changed
 
 - `OXC.patch_string/2` now builds patched output with iodata internally before flattening once.
+- Virtual bundle file sources are streamed from iodata directly into temporary files instead of being flattened first.
 
 ### Fixed
 

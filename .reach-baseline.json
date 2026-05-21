@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "tool": "reach",
+  "findings": [
+    {
+      "line": 543,
+      "message": "String.to_atom/1 on dynamic input can exhaust the atom table; use explicit mapping or String.to_existing_atom/1",
+      "file": "lib/oxc.ex",
+      "source": "smells",
+      "kind": "unsafe_atom_creation",
+      "fingerprint": "sha256:93f956466d2104ebb0755dd02906db8ea451deaf37b91fe965e0d3d4c60f3b37"
+    },
+    {
+      "line": 556,
+      "message": "String.to_atom/1 on dynamic input can exhaust the atom table; use explicit mapping or String.to_existing_atom/1",
+      "file": "lib/oxc.ex",
+      "source": "smells",
+      "kind": "unsafe_atom_creation",
+      "fingerprint": "sha256:93f956466d2104ebb0755dd02906db8ea451deaf37b91fe965e0d3d4c60f3b37"
+    }
+  ]
+}

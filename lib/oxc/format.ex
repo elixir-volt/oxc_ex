@@ -111,7 +111,7 @@ defmodule OXC.Format do
   def run(source, filename, opts \\ []) do
     opts_map =
       opts
-      |> Enum.into(%{})
+      |> Map.new()
       |> Map.new(fn
         {k, v}
         when is_atom(v) and

@@ -63,7 +63,11 @@ defmodule OXC.MixProject do
         "cmd cargo clippy --manifest-path native/oxc_fmt_nif/Cargo.toml -- -D warnings",
         "cmd cargo clippy --manifest-path native/oxc_lint_nif/Cargo.toml -- -D warnings"
       ],
-      ci: ["lint", "cmd OXC_EX_BUILD=1 MIX_ENV=test mix test"]
+      ci: [
+        "lint",
+        "reach.check --smells --strict --baseline .reach-baseline.json",
+        "cmd --shell OXC_EX_BUILD=1 MIX_ENV=test mix test"
+      ]
     ]
   end
 
@@ -74,8 +78,9 @@ defmodule OXC.MixProject do
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:ex_dna, "~> 1.3", only: [:dev, :test], runtime: false},
-      {:ex_slop, "~> 0.2", only: [:dev, :test], runtime: false}
+      {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
+      {:ex_slop, "~> 0.2", only: [:dev, :test], runtime: false},
+      {:reach, "~> 2.5", only: [:dev, :test], runtime: false}
     ]
   end
 end

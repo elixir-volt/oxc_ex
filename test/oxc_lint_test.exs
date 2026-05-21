@@ -182,6 +182,51 @@ defmodule OXC.LintTest do
       assert second_diag.severity == :warn
     end
 
+    test "returns diagnostics from a nonzero tsgolint exit" do
+      tmp_dir =
+        Path.join(
+          System.tmp_dir!(),
+          "oxc-type-aware-exit-diag-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(tmp_dir)
+      on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+      executable = fake_tsgolint(tmp_dir, exit_status: 1)
+      file = Path.join(tmp_dir, "app.ts")
+      File.write!(file, "Promise.resolve()")
+
+      assert {:ok, [diag]} =
+               OXC.Lint.run([file],
+                 type_aware: true,
+                 tsgolint: executable,
+                 rules: %{"typescript/no-floating-promises" => :deny}
+               )
+
+      assert diag.rule == "typescript/no-floating-promises"
+      assert diag.severity == :deny
+    end
+
+    test "returns errors from a nonzero tsgolint error-only exit" do
+      tmp_dir =
+        Path.join(
+          System.tmp_dir!(),
+          "oxc-type-aware-exit-error-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(tmp_dir)
+      on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+      executable = fake_tsgolint_error(tmp_dir, "tsgolint exploded")
+
+      assert {:error, ["tsgolint exploded"]} =
+               OXC.Lint.run([Path.join(tmp_dir, "app.ts")],
+                 type_aware: true,
+                 tsgolint: executable,
+                 rules: %{"typescript/no-floating-promises" => :deny}
+               )
+    end
+
     test "parses tsgolint error frames" do
       frame = frame(0, Jason.encode!(%{"error" => "boom"}))
       assert {:error, ["boom"]} = OXC.Lint.TypeAware.parse_output(frame)
@@ -192,6 +237,62 @@ defmodule OXC.LintTest do
 
       assert {:ok, [_diag]} =
                OXC.Lint.TypeAware.parse_output(valid <> <<10::little-32, 1, "bad">>)
+    end
+
+    test "real tsgolint reports source override diagnostics when available" do
+      with {:ok, executable} <- real_tsgolint() do
+        tmp_dir =
+          Path.join(
+            System.tmp_dir!(),
+            "oxc-type-aware-real-override-#{System.unique_integer([:positive])}"
+          )
+
+        File.mkdir_p!(tmp_dir)
+        on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+        write_tsconfig!(tmp_dir)
+        file = Path.join(tmp_dir, "app.ts")
+        File.write!(file, "const ok = 1\n")
+
+        override = "async function save() { return 1 }\nsave()\n"
+
+        assert {:ok, diagnostics} =
+                 OXC.Lint.run([file],
+                   type_aware: true,
+                   tsgolint: executable,
+                   source_overrides: %{file => override},
+                   rules: %{"typescript/no-floating-promises" => :deny}
+                 )
+
+        assert Enum.any?(diagnostics, &(&1.rule == "typescript/no-floating-promises"))
+      end
+    end
+
+    test "real tsgolint reports type-check diagnostics when available" do
+      with {:ok, executable} <- real_tsgolint() do
+        tmp_dir =
+          Path.join(
+            System.tmp_dir!(),
+            "oxc-type-aware-real-typecheck-#{System.unique_integer([:positive])}"
+          )
+
+        File.mkdir_p!(tmp_dir)
+        on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+        write_tsconfig!(tmp_dir)
+        file = Path.join(tmp_dir, "app.ts")
+        File.write!(file, "const value: string = 1\n")
+
+        assert {:ok, diagnostics} =
+                 OXC.Lint.run([file],
+                   type_aware: true,
+                   tsgolint: executable,
+                   type_check: true,
+                   rules: %{}
+                 )
+
+        assert Enum.any?(diagnostics, &String.starts_with?(&1.rule, "typescript/TS"))
+      end
     end
 
     defp diagnostic_payload(rule, start, stop) do
@@ -205,10 +306,11 @@ defmodule OXC.LintTest do
       }
     end
 
-    defp fake_tsgolint(tmp_dir) do
+    defp fake_tsgolint(tmp_dir, opts \\ []) do
       executable = Path.join(tmp_dir, "tsgolint")
       payload_path = Path.join(tmp_dir, "payload.json")
       argv_path = Path.join(tmp_dir, "argv.json")
+      exit_status = Keyword.get(opts, :exit_status, 0)
 
       File.write!(executable, """
       #!/usr/bin/env python3
@@ -227,10 +329,50 @@ defmodule OXC.LintTest do
         "labeled_ranges": [{"label": "promise", "range": {"pos": 1, "end": 5}}]
       }).encode()
       sys.stdout.buffer.write(struct.pack("<IB", len(body), 1) + body)
+      sys.exit(#{exit_status})
       """)
 
       File.chmod!(executable, 0o755)
       executable
+    end
+
+    defp fake_tsgolint_error(tmp_dir, message) do
+      executable = Path.join(tmp_dir, "tsgolint-error")
+
+      File.write!(executable, """
+      #!/usr/bin/env python3
+      import json, struct, sys
+      sys.stdin.read()
+      body = json.dumps({"error": #{inspect(message)}}).encode()
+      sys.stdout.buffer.write(struct.pack("<IB", len(body), 0) + body)
+      sys.exit(1)
+      """)
+
+      File.chmod!(executable, 0o755)
+      executable
+    end
+
+    defp real_tsgolint do
+      case System.find_executable("tsgolint") do
+        nil -> :unavailable
+        executable -> {:ok, executable}
+      end
+    end
+
+    defp write_tsconfig!(dir) do
+      File.write!(
+        Path.join(dir, "tsconfig.json"),
+        Jason.encode!(%{
+          "compilerOptions" => %{
+            "target" => "ES2022",
+            "module" => "ESNext",
+            "moduleResolution" => "Bundler",
+            "strict" => true,
+            "lib" => ["ES2022"]
+          },
+          "include" => ["*.ts"]
+        })
+      )
     end
 
     defp frame(type, payload) do

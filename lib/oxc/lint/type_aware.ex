@@ -49,7 +49,7 @@ defmodule OXC.Lint.TypeAware do
   def run(files, opts \\ []) when is_list(files) do
     with {:ok, executable} <- find_executable(opts),
          {:ok, output} <- run_tsgolint(executable, files, opts) do
-      parse_output(output, severity_by_rule(opts))
+      if is_binary(output), do: parse_output(output, severity_by_rule(opts)), else: {:ok, output}
     end
   end
 

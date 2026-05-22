@@ -73,31 +73,73 @@ defmodule OXC.Lint.TypeAware do
 
   defp run_tsgolint(executable, files, opts) do
     payload_path = write_payload!(build_payload(files, opts))
+    stderr_path = tmp_path("oxc-tsgolint-stderr")
     args = ["headless" | headless_flags(opts)]
 
     try do
-      command_args = ["sh", payload_path, executable | args]
+      command_args = ["sh", payload_path, stderr_path, executable | args]
 
-      case System.cmd(
-             "sh",
-             ["-c", "payload=$1; shift; exec \"$@\" < \"$payload\"" | command_args],
-             cd: Keyword.get(opts, :cwd, File.cwd!()),
-             stderr_to_stdout: false
-           ) do
-        {output, 0} -> {:ok, output}
-        {output, _status} -> parse_output(output, severity_by_rule(opts))
-      end
+      {output, status} =
+        System.cmd(
+          "sh",
+          [
+            "-c",
+            "payload=$1; stderr=$2; shift 2; exec \"$@\" < \"$payload\" 2> \"$stderr\""
+            | command_args
+          ],
+          cd: Keyword.get(opts, :cwd, File.cwd!()),
+          stderr_to_stdout: false
+        )
+
+      stderr = read_file(stderr_path)
+      handle_tsgolint_result(output, stderr, status, severity_by_rule(opts))
     after
       File.rm(payload_path)
+      File.rm(stderr_path)
     end
   rescue
     exception -> {:error, [Exception.message(exception)]}
   end
 
   defp write_payload!(payload) do
-    path = Path.join(System.tmp_dir!(), "oxc-tsgolint-#{System.unique_integer([:positive])}.json")
+    path = tmp_path("oxc-tsgolint-payload", ".json")
     File.write!(path, Jason.encode!(payload))
     path
+  end
+
+  defp tmp_path(prefix, extension \\ "") do
+    Path.join(System.tmp_dir!(), "#{prefix}-#{System.unique_integer([:positive])}#{extension}")
+  end
+
+  defp read_file(path) do
+    case File.read(path) do
+      {:ok, content} -> content
+      {:error, _reason} -> ""
+    end
+  end
+
+  defp handle_tsgolint_result(output, _stderr, 0, _severities), do: {:ok, output}
+
+  defp handle_tsgolint_result(output, stderr, status, severities) do
+    case parse_output(output, severities) do
+      {:ok, []} -> {:error, [tsgolint_failure_message(stderr, status)]}
+      {:ok, diagnostics} when stderr == "" -> {:ok, diagnostics}
+      {:ok, _diagnostics} -> {:error, [tsgolint_failure_message(stderr, status)]}
+      {:error, errors} when stderr == "" -> {:error, errors}
+      {:error, errors} -> {:error, errors ++ [tsgolint_failure_message(stderr, status)]}
+    end
+  end
+
+  defp tsgolint_failure_message("", status), do: "tsgolint exited with status #{status}"
+
+  defp tsgolint_failure_message(stderr, status) do
+    stderr = String.trim(stderr)
+
+    if stderr == "" do
+      "tsgolint exited with status #{status}"
+    else
+      "tsgolint exited with status #{status}: #{stderr}"
+    end
   end
 
   defp build_payload(files, opts) do

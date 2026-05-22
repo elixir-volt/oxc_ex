@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.15.1
+
+### Fixed
+
+- `OXC.Lint.run/2` now reports nonzero `tsgolint` exits with stderr output, including panics from unsupported input files, instead of treating empty or malformed output as a clean type-aware lint result.
+
 ## 0.15.0
 
 ### Added

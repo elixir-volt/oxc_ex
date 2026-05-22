@@ -227,6 +227,29 @@ defmodule OXC.LintTest do
                )
     end
 
+    test "returns stderr from a nonzero tsgolint panic" do
+      tmp_dir =
+        Path.join(
+          System.tmp_dir!(),
+          "oxc-type-aware-panic-#{System.unique_integer([:positive])}"
+        )
+
+      File.mkdir_p!(tmp_dir)
+      on_exit(fn -> File.rm_rf!(tmp_dir) end)
+
+      executable = fake_tsgolint_stderr(tmp_dir, "panic: Unknown script kind")
+
+      assert {:error, [message]} =
+               OXC.Lint.run([Path.join(tmp_dir, "App.vue")],
+                 type_aware: true,
+                 tsgolint: executable,
+                 rules: %{"typescript/no-floating-promises" => :deny}
+               )
+
+      assert message =~ "tsgolint exited with status 2"
+      assert message =~ "panic: Unknown script kind"
+    end
+
     test "parses tsgolint error frames" do
       frame = frame(0, Jason.encode!(%{"error" => "boom"}))
       assert {:error, ["boom"]} = OXC.Lint.TypeAware.parse_output(frame)
@@ -346,6 +369,21 @@ defmodule OXC.LintTest do
       body = json.dumps({"error": #{inspect(message)}}).encode()
       sys.stdout.buffer.write(struct.pack("<IB", len(body), 0) + body)
       sys.exit(1)
+      """)
+
+      File.chmod!(executable, 0o755)
+      executable
+    end
+
+    defp fake_tsgolint_stderr(tmp_dir, message) do
+      executable = Path.join(tmp_dir, "tsgolint-stderr")
+
+      File.write!(executable, """
+      #!/usr/bin/env python3
+      import sys
+      sys.stdin.read()
+      sys.stderr.write(#{inspect(message)})
+      sys.exit(2)
       """)
 
       File.chmod!(executable, 0o755)

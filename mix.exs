@@ -12,7 +12,7 @@ defmodule OXC.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),
-      dialyzer: [plt_add_apps: [:mix]],
+      dialyzer: [plt_add_apps: [:mix, :rustq]],
       name: "OXC",
       description:
         "Elixir bindings for the OXC JavaScript toolchain — parse, transform, minify, and bundle JS/TS via Rust NIFs.",
@@ -52,6 +52,7 @@ defmodule OXC.MixProject do
   defp aliases do
     [
       lint: [
+        "rustq.gen --check",
         "format --check-formatted",
         "credo --strict",
         "ex_dna",
@@ -75,6 +76,7 @@ defmodule OXC.MixProject do
     [
       {:rustler, "~> 0.36 or ~> 0.37", optional: true},
       {:rustler_precompiled, "~> 0.8"},
+      {:rustq, path: "../rustq", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

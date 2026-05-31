@@ -70,65 +70,8 @@ fn err<T>(msg: impl Into<String>) -> R<T> {
     Err(msg.into())
 }
 
-// ── Term helpers ──
-
-fn get<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>> {
-    term.map_get(key).ok()
-}
-
-fn is_nil(term: Term) -> bool {
-    term.is_atom() && term.atom_to_string().ok().as_deref() == Some("nil")
-}
-
-fn opt<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>> {
-    get(term, key).filter(|t| !is_nil(*t))
-}
-
-fn str_val<'a>(term: Term<'a>, key: rustler::Atom) -> String {
-    match get(term, key) {
-        Some(t) => t
-            .decode::<String>()
-            .or_else(|_| t.atom_to_string())
-            .unwrap_or_default(),
-        None => String::new(),
-    }
-}
-
-fn bool_val(term: Term, key: rustler::Atom) -> bool {
-    get(term, key)
-        .and_then(|t| t.decode::<bool>().ok())
-        .unwrap_or(false)
-}
-
-fn f64_val(term: Term, key: rustler::Atom) -> f64 {
-    get(term, key)
-        .and_then(|t| {
-            t.decode::<f64>()
-                .ok()
-                .or_else(|| t.decode::<i64>().ok().map(|i| i as f64))
-        })
-        .unwrap_or(0.0)
-}
-
-fn list_val<'a>(term: Term<'a>, key: rustler::Atom) -> Vec<Term<'a>> {
-    get(term, key)
-        .and_then(|t| t.decode::<Vec<Term>>().ok())
-        .unwrap_or_default()
-}
-
-fn type_atom(term: Term) -> Option<rustler::Atom> {
-    get(term, a::r#type()).and_then(|t| t.decode::<rustler::Atom>().ok())
-}
-
-fn type_eq(term: Term, expected: rustler::Atom) -> bool {
-    type_atom(term) == Some(expected)
-}
-
-fn type_str(term: Term) -> String {
-    get(term, a::r#type())
-        .and_then(|t| t.atom_to_string().ok())
-        .unwrap_or_else(|| "<no type>".into())
-}
+include!("generated_term_helpers.rs");
+include!("generated_ast_decoders.rs");
 
 fn nid() -> Cell<NodeId> {
     Cell::new(NodeId::DUMMY)
@@ -185,7 +128,9 @@ pub fn codegen<'a>(env: Env<'a>, ast: Term<'a>) -> NifResult<Term<'a>> {
     let allocator = Allocator::default();
     let b = AstBuilder::new(&allocator);
 
-    match build_program(b, ast) {
+    let input = decode_program_input(ast)?;
+
+    match build_program(b, input.body) {
         Ok(program) => {
             let CodegenReturn { code, .. } = Codegen::new().build(&program);
             Ok((atoms::ok(), code).encode(env))
@@ -196,8 +141,8 @@ pub fn codegen<'a>(env: Env<'a>, ast: Term<'a>) -> NifResult<Term<'a>> {
 
 // ── Program ──
 
-fn build_program<'a>(b: AstBuilder<'a>, term: Term) -> R<Program<'a>> {
-    let body = build_stmts(b, list_val(term, a::body()))?;
+fn build_program<'a>(b: AstBuilder<'a>, body_terms: Vec<Term>) -> R<Program<'a>> {
+    let body = build_stmts(b, body_terms)?;
     Ok(b.program(SPAN, SourceType::mjs(), "", b.vec(), None, b.vec(), body))
 }
 
@@ -242,9 +187,10 @@ fn build_stmt<'a>(b: AstBuilder<'a>, term: Term) -> R<Statement<'a>> {
     }
 
     if ty == a::if_statement() {
-        let test = build_expr(b, get(term, a::test()).ok_or("Missing :test")?)?;
-        let cons = build_stmt(b, get(term, a::consequent()).ok_or("Missing :consequent")?)?;
-        let alt = match opt(term, a::alternate()) {
+        let input = decode_if_statement_input(term)?;
+        let test = build_expr(b, input.test)?;
+        let cons = build_stmt(b, input.consequent)?;
+        let alt = match input.alternate {
             Some(t) => Some(build_stmt(b, t)?),
             None => None,
         };

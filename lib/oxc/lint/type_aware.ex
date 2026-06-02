@@ -121,12 +121,21 @@ defmodule OXC.Lint.TypeAware do
   defp handle_tsgolint_result(output, _stderr, 0, _severities), do: {:ok, output}
 
   defp handle_tsgolint_result(output, stderr, status, severities) do
-    case parse_output(output, severities) do
-      {:ok, []} -> {:error, [tsgolint_failure_message(stderr, status)]}
-      {:ok, diagnostics} when stderr == "" -> {:ok, diagnostics}
-      {:ok, _diagnostics} -> {:error, [tsgolint_failure_message(stderr, status)]}
-      {:error, errors} when stderr == "" -> {:error, errors}
-      {:error, errors} -> {:error, errors ++ [tsgolint_failure_message(stderr, status)]}
+    case {parse_output(output, severities), stderr} do
+      {{:ok, []}, _stderr} ->
+        {:error, [tsgolint_failure_message(stderr, status)]}
+
+      {{:ok, diagnostics}, ""} ->
+        {:ok, diagnostics}
+
+      {{:ok, _diagnostics}, _stderr} ->
+        {:error, [tsgolint_failure_message(stderr, status)]}
+
+      {{:error, errors}, ""} ->
+        {:error, errors}
+
+      {{:error, errors}, _stderr} ->
+        {:error, errors ++ [tsgolint_failure_message(stderr, status)]}
     end
   end
 

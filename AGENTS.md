@@ -8,7 +8,7 @@ mix compile                   # use precompiled NIFs
 mix test                      # full test suite
 ```
 
-Set `OXC_EX_BUILD=1` for any compilation that touches Rust code.
+Set `OXC_EX_BUILD=1` for any compilation that touches Rust code. GitHub CI uses the shared `elixir-vibe/actions/.github/workflows/elixir-rustler-ci.yml` workflow with Rust `1.95.0` and `OXC_EX_BUILD=1`.
 
 ## Architecture
 

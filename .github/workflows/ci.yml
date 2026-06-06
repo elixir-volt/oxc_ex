@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: elixir-vibe/actions/.github/workflows/elixir-rustler-ci.yml@main
+    with:
+      rust-toolchain: "1.95.0"
+      rust-profile: default
+      rust-cache-workspaces: |
+        . -> target
+        native/oxc_lint_nif -> target
+        native/oxc_fmt_nif -> target
+      extra-env: |
+        OXC_EX_BUILD=1

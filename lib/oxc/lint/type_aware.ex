@@ -228,7 +228,7 @@ defmodule OXC.Lint.TypeAware do
          diagnostics
        )
        when byte_size(rest) >= length do
-    <<payload::binary-size(length), tail::binary>> = rest
+    <<payload::binary-size(^length), tail::binary>> = rest
 
     case decode_frame(type, payload, severities) do
       {:diagnostic, diagnostic} ->

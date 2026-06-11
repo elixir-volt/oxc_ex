@@ -445,6 +445,17 @@ via `oxc_codegen`.
 For **lint**, oxlint's built-in rules run natively in Rust. Custom rules
 written in Elixir receive the same parsed AST and run in the BEAM.
 
+## Part of Elixir Volt
+
+oxc gives Elixir native-speed JS/TS parsing, transforming, linting, and bundling through the OXC toolchain.
+
+It is part of a frontend stack that runs inside the BEAM — builds, JS
+runtimes, icons, and Vue-to-LiveView compilation as supervised parts of the
+application instead of external toolchain processes. See the
+[Elixir Volt](https://github.com/elixir-volt) organization for the rest, and
+[Building Blocks for the Future Web](https://github.com/elixir-vibe/building-blocks)
+for the thesis, architecture, and roadmap that tie them together.
+
 ## License
 
 MIT

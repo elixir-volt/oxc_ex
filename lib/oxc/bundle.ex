@@ -134,8 +134,8 @@ defmodule OXC.Bundle do
       files: Enum.map(bundle.files, fn {path, source} -> %{path: path, source: source} end),
       cwd: bundle.cwd || "",
       outdir: bundle.outdir,
-      format: normalize_atom(bundle.format),
-      exports: normalize_atom(bundle.exports),
+      format: bundle.format,
+      exports: bundle.exports,
       minify: bundle.minify,
       treeshake: bundle.treeshake,
       sourcemap: bundle.sourcemap,
@@ -148,10 +148,9 @@ defmodule OXC.Bundle do
       conditions: bundle.conditions,
       main_fields: bundle.main_fields,
       modules: bundle.modules,
-      module_types: normalize_module_types(bundle.module_types),
-      preserve_entry_signatures:
-        normalize_preserve_entry_signatures(bundle.preserve_entry_signatures),
-      jsx: normalize_atom(bundle.jsx),
+      module_types: bundle.module_types,
+      preserve_entry_signatures: bundle.preserve_entry_signatures,
+      jsx: bundle.jsx,
       jsx_factory: bundle.jsx_factory,
       jsx_fragment: bundle.jsx_fragment,
       import_source: bundle.import_source,
@@ -160,18 +159,5 @@ defmodule OXC.Bundle do
       chunk_file_names: bundle.chunk_file_names,
       asset_file_names: bundle.asset_file_names
     }
-  end
-
-  defp normalize_atom(value) when is_atom(value), do: Atom.to_string(value)
-  defp normalize_atom(value), do: to_string(value)
-
-  defp normalize_preserve_entry_signatures(nil), do: ""
-  defp normalize_preserve_entry_signatures(false), do: "false"
-  defp normalize_preserve_entry_signatures(value) when is_atom(value), do: Atom.to_string(value)
-  defp normalize_preserve_entry_signatures(value) when is_binary(value), do: value
-  defp normalize_preserve_entry_signatures(_value), do: ""
-
-  defp normalize_module_types(types) when is_map(types) do
-    Map.new(types, fn {ext, loader} -> {to_string(ext), to_string(loader)} end)
   end
 end

@@ -16,11 +16,11 @@ defmodule OXC.Bundle.Entry do
 
   def new({name, import, source}), do: %__MODULE__{name: name, import: import, source: source}
 
-  def new(map) when is_map(map) do
+  def new(%{import: import} = map) do
     %__MODULE__{
-      name: Map.get(map, :name) || Map.get(map, "name"),
-      import: Map.get(map, :import) || Map.get(map, "import"),
-      source: Map.get(map, :source) || Map.get(map, "source")
+      name: Map.get(map, :name),
+      import: import,
+      source: Map.get(map, :source)
     }
   end
 

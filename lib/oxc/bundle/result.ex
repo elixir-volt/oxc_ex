@@ -11,8 +11,8 @@ defmodule OXC.Bundle.Result do
 
   def new(map) when is_map(map) do
     %__MODULE__{
-      outputs: map |> Map.get(:outputs, Map.get(map, "outputs", [])) |> Enum.map(&Output.new/1),
-      warnings: Map.get(map, :warnings, Map.get(map, "warnings", []))
+      outputs: map |> Map.get(:outputs, []) |> Enum.map(&Output.new/1),
+      warnings: Map.get(map, :warnings, [])
     }
   end
 end

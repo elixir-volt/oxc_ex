@@ -14,7 +14,7 @@ use std::path::Path;
 
 use crate::atoms;
 use crate::error::{error_to_term, format_errors};
-use crate::options::{decode_options, MinifyInput, TransformInput};
+use crate::options::{MinifyInput, TransformInput};
 
 fn parser_options() -> ParseOptions {
     ParseOptions {
@@ -25,6 +25,43 @@ fn parser_options() -> ParseOptions {
 
 fn encode_ok<'a, T: Serialize>(env: Env<'a>, value: T) -> NifResult<Term<'a>> {
     Ok((atoms::ok(), SerdeTerm(value)).encode(env))
+}
+
+fn json_to_term<'a>(env: Env<'a>, value: &Value) -> NifResult<Term<'a>> {
+    match value {
+        Value::Null => Ok(Option::<u8>::None.encode(env)),
+        Value::Bool(value) => Ok(value.encode(env)),
+        Value::Number(number) => {
+            if let Some(value) = number.as_i64() {
+                Ok(value.encode(env))
+            } else if let Some(value) = number.as_u64() {
+                Ok(value.encode(env))
+            } else if let Some(value) = number.as_f64() {
+                Ok(value.encode(env))
+            } else {
+                number
+                    .to_string()
+                    .parse::<f64>()
+                    .map(|value| value.encode(env))
+                    .map_err(|_| Error::BadArg)
+            }
+        }
+        Value::String(value) => Ok(value.encode(env)),
+        Value::Array(values) => {
+            let terms: NifResult<Vec<Term<'a>>> = values
+                .iter()
+                .map(|value| json_to_term(env, value))
+                .collect();
+            Ok(terms?.encode(env))
+        }
+        Value::Object(values) => {
+            let mut map = Term::map_new(env);
+            for (key, value) in values {
+                map = map.map_put(key, json_to_term(env, value)?)?;
+            }
+            Ok(map)
+        }
+    }
 }
 
 pub fn source_from_term<'a>(term: Term<'a>) -> NifResult<Binary<'a>> {
@@ -176,7 +213,7 @@ pub fn parse<'a>(env: Env<'a>, source_term: Term<'a>, filename: &str) -> NifResu
         }
         None => return error_to_term(env, &["Empty ESTree JSON output".to_string()]),
     };
-    encode_ok(env, json)
+    Ok((atoms::ok(), json_to_term(env, &json)?).encode(env))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -198,7 +235,7 @@ pub fn transform<'a>(
 ) -> NifResult<Term<'a>> {
     let source_binary = source_from_term(source_term)?;
     let source = binary_to_str(&source_binary)?;
-    let opts = decode_options::<TransformInput>(opts_term);
+    let opts = TransformInput::from_term(opts_term);
     Ok(transform_source(source, filename, &opts).to_term(env))
 }
 
@@ -211,7 +248,7 @@ pub fn minify<'a>(
 ) -> NifResult<Term<'a>> {
     let source_binary = source_from_term(source_term)?;
     let source = binary_to_str(&source_binary)?;
-    let opts = decode_options::<MinifyInput>(opts_term);
+    let opts = MinifyInput::from_term(opts_term);
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(filename).unwrap_or_default();
 

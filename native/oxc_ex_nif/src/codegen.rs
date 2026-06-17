@@ -191,8 +191,8 @@ fn build_stmt<'a>(b: AstBuilder<'a>, term: Term) -> R<Statement<'a>> {
         let test = build_expr(b, input.test)?;
         let cons = build_stmt(b, input.consequent)?;
         let alt = match input.alternate {
-            Some(t) => Some(build_stmt(b, t)?),
-            None => None,
+            Some(t) if !is_nil(t) => Some(build_stmt(b, t)?),
+            _ => None,
         };
         return Ok(b.statement_if(SPAN, test, cons, alt));
     }

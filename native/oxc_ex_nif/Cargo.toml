@@ -17,14 +17,14 @@ oxc_diagnostics = "0.130"
 oxc_minifier = "0.130"
 oxc_parser = "0.130"
 oxc_semantic = "0.130"
-oxc_sourcemap = "6.1"
+oxc_sourcemap = "7.0"
 oxc_span = "0.130"
 oxc_str = "0.130"
 oxc_syntax = "0.130"
 oxc_transformer = "0.130"
-oxc95 = { package = "oxc", version = "=0.95.0" }
-rolldown = "=0.1.0"
-rolldown_common = "=0.1.0"
+oxc = { version = "0.135", features = ["minifier"] }
+rolldown = "1.1"
+rolldown_common = "1.1"
 rustc-hash = "2.1.1"
 rayon = "1"
 serde = { version = "1", features = ["derive"] }

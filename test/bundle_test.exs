@@ -7,7 +7,7 @@ defmodule OXC.BundleTest do
       {:ok, js} = OXC.bundle(files, entry: "a.ts")
 
       assert_valid_bundle(js)
-      assert js =~ "globalThis.x = x"
+      assert js =~ "globalThis.x = 1"
       refute js =~ "number"
       refute js =~ "import "
       refute js =~ "export "
@@ -29,7 +29,7 @@ defmodule OXC.BundleTest do
 
       {:ok, js} = OXC.bundle(files, entry: "b.ts")
       assert_valid_bundle(js)
-      assert js =~ "globalThis.val = x"
+      assert js =~ "globalThis.val = 1"
       refute js =~ "number"
       refute js =~ "import "
       refute js =~ "export "
@@ -48,7 +48,8 @@ defmodule OXC.BundleTest do
 
     test "handles diamond dependency graphs" do
       files = [
-        {"entry.ts", "import { d } from './d'\nconsole.log(d);"},
+        {"entry.ts",
+         "import { B } from './b'\nimport { C } from './c'\nconsole.log(new B(), new C());"},
         {"d.ts",
          "import { B } from './b'\nimport { C } from './c'\nexport const d = [B, C].length;"},
         {"b.ts", "import { A } from './a'\nexport class B extends A {}"},
@@ -91,7 +92,7 @@ defmodule OXC.BundleTest do
       {:ok, js} = OXC.bundle(files, entry: "entry.ts")
       assert_valid_bundle(js)
       assert js =~ "greet"
-      assert js =~ "value"
+      assert js =~ "hi"
       assert js =~ "42"
       refute js =~ "import "
       refute js =~ "export "
@@ -141,7 +142,7 @@ defmodule OXC.BundleTest do
 
       {:ok, js} = OXC.bundle(files, entry: "b.ts")
       assert_valid_bundle(js)
-      assert js =~ "globalThis.val = x"
+      assert js =~ "globalThis.val = 1"
     end
 
     test "resolves nested paths without basename collisions" do
@@ -154,8 +155,7 @@ defmodule OXC.BundleTest do
 
       {:ok, js} = OXC.bundle(files, entry: "entry.ts")
       assert_valid_bundle(js)
-      assert js =~ "src"
-      assert js =~ "lib"
+      assert js =~ "[1, 2]"
     end
 
     test "keeps modules isolated enough for duplicate local bindings" do
@@ -236,7 +236,7 @@ defmodule OXC.BundleTest do
     end
 
     test "banner and footer are preserved" do
-      files = [{"a.ts", "const x = 1;"}]
+      files = [{"a.ts", "console.log('body');"}]
       {:ok, js} = OXC.bundle(files, entry: "a.ts", banner: "/* top */", footer: "/* bottom */")
 
       assert String.starts_with?(js, "/* top */")
@@ -346,7 +346,7 @@ defmodule OXC.BundleTest do
     end
 
     test "format defaults to :iife" do
-      files = [{"main.ts", "const x = 1;"}]
+      files = [{"main.ts", "console.log('body');"}]
       {:ok, js} = OXC.bundle(files, entry: "main.ts")
       assert js =~ "(function"
     end

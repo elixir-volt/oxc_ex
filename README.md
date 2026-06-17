@@ -402,6 +402,27 @@ Options:
 {:ok, js} = OXC.bundle(files, entry: "target.ts", banner: "/* MIT */", footer: "/* v1.0 */")
 ```
 
+For multi-entry builds that need access to all generated chunks and assets, use
+`OXC.Bundle`:
+
+```elixir
+alias OXC.Bundle
+
+{:ok, result} =
+  Bundle.new()
+  |> Bundle.entries([
+    %{name: "app", import: "app.js", source: "import { shared } from './shared.js'; console.log(shared);"},
+    %{name: "admin", import: "admin.js", source: "import { shared } from './shared.js'; console.log(shared);"}
+  ])
+  |> Bundle.files([{"shared.js", "export const shared = 1;"}])
+  |> Bundle.format(:esm)
+  |> Bundle.output(entry_file_names: "[name].js", chunk_file_names: "chunks/[name]-[hash].js")
+  |> Bundle.run()
+
+Enum.map(result.outputs, & &1.file_name)
+#=> ["app.js", "admin.js", "chunks/shared-....js"]
+```
+
 ### Bang Variants
 
 All functions have bang variants that raise `OXC.Error` on failure:

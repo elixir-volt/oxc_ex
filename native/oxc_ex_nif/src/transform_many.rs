@@ -1,7 +1,7 @@
 use rayon::prelude::*;
 use rustler::{Encoder, Env, NifResult, Term};
 
-use crate::options::{decode_options, TransformInput};
+use crate::options::TransformInput;
 use crate::parse::{binary_to_str, source_from_term, transform_source, TransformOutput};
 
 #[rustler::nif(schedule = "DirtyCpu")]
@@ -10,7 +10,7 @@ pub fn transform_many<'a>(
     inputs: Vec<(Term<'a>, String)>,
     opts_term: Term<'a>,
 ) -> NifResult<Term<'a>> {
-    let opts = decode_options::<TransformInput>(opts_term);
+    let opts = TransformInput::from_term(opts_term);
     let inputs = inputs
         .into_iter()
         .map(|(source_term, filename)| {

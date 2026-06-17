@@ -3,19 +3,18 @@ use std::fs;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 
-use oxc95::minifier::{
-    CompressOptions as RolldownCompressOptions, MangleOptions as RolldownMangleOptions,
-    MangleOptionsKeepNames as RolldownMangleOptionsKeepNames,
-};
 use rolldown::{
     AddonOutputOption, Bundler, BundlerOptions, BundlerTransformOptions, Either as RolldownEither,
     InputItem, IsExternal, JsxOptions as RolldownJsxOptions, OutputExports, OutputFormat,
-    PreserveEntrySignatures, RawMinifyOptions, RawMinifyOptionsDetailed,
-    ResolveOptions as RolldownResolveOptions, SourceMapType, TreeshakeOptions,
+    PreserveEntrySignatures, RawCompressOptions, RawMangleOptions, RawMinifyOptions,
+    RawMinifyOptionsDetailed, ResolveOptions as RolldownResolveOptions, SourceMapType,
+    TreeshakeOptions,
 };
-use rolldown_common::{ModuleType, Output};
+use rolldown_common::{
+    AssetFilenamesOutputOption, ChunkFilenamesOutputOption, ModuleType, Output, StrOrBytes,
+};
 use rustc_hash::FxHashMap;
-use rustler::{Binary, Encoder, Env, Error, ListIterator, NifResult, SerdeTerm, Term};
+use rustler::{Binary, Encoder, Env, Error, ListIterator, NifMap, NifResult, SerdeTerm, Term};
 use serde::Serialize;
 use serde_json::Value;
 use tempfile::TempDir;
@@ -23,12 +22,32 @@ use tokio::runtime::Builder as RuntimeBuilder;
 
 use crate::atoms;
 use crate::error::error_to_term;
-use crate::options::{decode_options, BundleOptions};
+use crate::options::{BundleEntry, BundleOptions};
 
 #[derive(Serialize)]
 struct CodeWithSourcemap {
     code: String,
     sourcemap: String,
+}
+
+#[derive(NifMap)]
+struct BundleRunResult {
+    outputs: Vec<BundleRunOutput>,
+    warnings: Vec<String>,
+}
+
+#[derive(NifMap)]
+struct BundleRunOutput {
+    r#type: rustler::Atom,
+    name: Option<String>,
+    file_name: String,
+    path: Option<String>,
+    code: Option<String>,
+    source: Option<String>,
+    sourcemap: Option<String>,
+    imports: Vec<String>,
+    dynamic_imports: Vec<String>,
+    exports: Vec<String>,
 }
 
 fn normalize_virtual_path(path: &str) -> Result<PathBuf, String> {
@@ -176,22 +195,15 @@ fn build_minify_options(drop_console: bool) -> RawMinifyOptions {
         return RawMinifyOptions::Bool(true);
     }
 
-    let compress = RolldownCompressOptions {
-        drop_console: true,
-        ..RolldownCompressOptions::smallest()
-    };
-    let mangle = RolldownMangleOptions {
-        top_level: false,
-        keep_names: RolldownMangleOptionsKeepNames::all_false(),
-        debug: false,
-    };
-
     RawMinifyOptions::Object(RawMinifyOptionsDetailed {
-        options: oxc95::minifier::MinifierOptions {
-            mangle: Some(mangle),
-            compress: Some(compress),
-        },
-        default_target: true,
+        mangle: Some(RawMangleOptions {
+            top_level: Some(false),
+            keep_names: None,
+        }),
+        compress: Some(RawCompressOptions {
+            drop_console: Some(true),
+            ..RawCompressOptions::default()
+        }),
         remove_whitespace: true,
     })
 }
@@ -232,24 +244,35 @@ fn inject_preamble(code: &str, preamble: &str) -> String {
 
 fn build_bundle_options(
     cwd: &Path,
-    entry_name: String,
-    opts: &BundleOptions,
+    input: Vec<InputItem>,
+    opts: &BundleOptions<'_>,
     external_specifiers: Vec<String>,
+    file: Option<String>,
 ) -> BundlerOptions {
     BundlerOptions {
-        input: Some(vec![InputItem {
-            name: Some("bundle".to_string()),
-            import: entry_name,
-        }]),
+        input: Some(input),
         cwd: Some(cwd.to_path_buf()),
         external: (!external_specifiers.is_empty()).then(|| IsExternal::from(external_specifiers)),
-        file: Some("bundle.js".to_string()),
+        dir: opts.outdir.clone(),
+        file,
         format: Some(match opts.format.as_str() {
             "esm" => OutputFormat::Esm,
             "cjs" => OutputFormat::Cjs,
             _ => OutputFormat::Iife,
         }),
         exports: parse_output_exports(&opts.exports),
+        entry_filenames: opts
+            .entry_file_names
+            .clone()
+            .map(ChunkFilenamesOutputOption::String),
+        chunk_filenames: opts
+            .chunk_file_names
+            .clone()
+            .map(ChunkFilenamesOutputOption::String),
+        asset_filenames: opts
+            .asset_file_names
+            .clone()
+            .map(AssetFilenamesOutputOption::String),
         preserve_entry_signatures: parse_preserve_entry_signatures(&opts.preserve_entry_signatures),
         sourcemap: opts.sourcemap.then_some(SourceMapType::Hidden),
         banner: opts
@@ -340,7 +363,7 @@ fn bundle_virtual_project<'a>(
             "bundle entry {entry_name:?} was not found in files"
         )]);
     }
-    run_rolldown(&cwd, entry_name, opts, explicit_external_specifiers(opts))
+    run_rolldown_single(&cwd, entry_name, opts, explicit_external_specifiers(opts))
 }
 
 fn bundle_filesystem_entry(
@@ -366,7 +389,7 @@ fn bundle_filesystem_entry(
         .map_err(|error| vec![format!("Failed to resolve bundle cwd: {error}")])?;
 
     let entry_name = relative_entry_name(&entry_path, &entry, &cwd)?;
-    run_rolldown(&cwd, entry_name, opts, explicit_external_specifiers(opts))
+    run_rolldown_single(&cwd, entry_name, opts, explicit_external_specifiers(opts))
 }
 
 fn relative_entry_name(entry_path: &Path, entry: &str, cwd: &Path) -> Result<String, Vec<String>> {
@@ -383,13 +406,23 @@ fn relative_entry_name(entry_path: &Path, entry: &str, cwd: &Path) -> Result<Str
     }
 }
 
-fn run_rolldown(
+fn run_rolldown_single(
     cwd: &Path,
     entry_name: String,
-    opts: &BundleOptions,
+    opts: &BundleOptions<'_>,
     external_specifiers: Vec<String>,
 ) -> Result<(String, Option<String>), Vec<String>> {
-    let options = build_bundle_options(cwd, entry_name, opts, external_specifiers);
+    let input = vec![InputItem {
+        name: Some("bundle".to_string()),
+        import: entry_name,
+    }];
+    let options = build_bundle_options(
+        cwd,
+        input,
+        opts,
+        external_specifiers,
+        Some("bundle.js".to_string()),
+    );
     let runtime = RuntimeBuilder::new_current_thread()
         .enable_all()
         .build()
@@ -435,13 +468,195 @@ fn run_rolldown(
     Ok((code, sourcemap))
 }
 
+fn bundle_run_project<'a>(opts: &BundleOptions<'a>) -> Result<BundleRunResult, Vec<String>> {
+    if opts.entries.is_empty() {
+        return Err(vec!["bundle run requires at least one entry".to_string()]);
+    }
+
+    let mut source_files: Vec<(String, Term<'a>)> = opts
+        .entries
+        .iter()
+        .filter_map(|entry| entry.source.map(|source| (entry.import.clone(), source)))
+        .collect();
+    source_files.extend(
+        opts.files
+            .iter()
+            .map(|file| (file.path.clone(), file.source)),
+    );
+
+    let tempdir;
+    let cwd = if source_files.is_empty() {
+        let cwd = if opts.cwd.is_empty() {
+            PathBuf::from(".")
+        } else {
+            PathBuf::from(&opts.cwd)
+        };
+        cwd.canonicalize()
+            .map_err(|error| vec![format!("Failed to resolve bundle cwd: {error}")])?
+    } else {
+        tempdir = TempDir::new()
+            .map_err(|error| vec![format!("Failed to create temp directory: {error}")])?;
+        write_virtual_project(&tempdir, &source_files)?;
+        tempdir
+            .path()
+            .canonicalize()
+            .unwrap_or_else(|_| tempdir.path().to_path_buf())
+    };
+
+    let input = opts
+        .entries
+        .iter()
+        .map(|entry| input_item_for_entry(entry))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    run_rolldown_outputs(&cwd, input, opts, explicit_external_specifiers(opts))
+}
+
+fn input_item_for_entry(entry: &BundleEntry<'_>) -> Result<InputItem, Vec<String>> {
+    if entry.import.is_empty() {
+        return Err(vec!["bundle entry import cannot be empty".to_string()]);
+    }
+
+    let import = if Path::new(&entry.import).is_absolute() {
+        entry.import.replace('\\', "/")
+    } else {
+        normalize_virtual_path(&entry.import)
+            .map(|path| path.to_string_lossy().replace('\\', "/"))
+            .map_err(|message| vec![message])?
+    };
+
+    Ok(InputItem {
+        name: entry.name.clone(),
+        import,
+    })
+}
+
+fn run_rolldown_outputs(
+    cwd: &Path,
+    input: Vec<InputItem>,
+    opts: &BundleOptions<'_>,
+    external_specifiers: Vec<String>,
+) -> Result<BundleRunResult, Vec<String>> {
+    let options = build_bundle_options(cwd, input, opts, external_specifiers, None);
+    let runtime = RuntimeBuilder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| vec![format!("Failed to initialize Tokio runtime: {error}")])?;
+
+    let mut bundler = Bundler::new(options)
+        .map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
+
+    let output = runtime
+        .block_on(bundler.generate())
+        .map_err(|errors| errors.iter().map(ToString::to_string).collect::<Vec<_>>())?;
+
+    let _ = runtime.block_on(bundler.close());
+
+    let outputs = output
+        .assets
+        .into_iter()
+        .map(|asset| output_to_term_data(cwd, opts, asset))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(BundleRunResult {
+        outputs,
+        warnings: Vec::new(),
+    })
+}
+
+fn output_to_term_data(
+    cwd: &Path,
+    opts: &BundleOptions<'_>,
+    output: Output,
+) -> Result<BundleRunOutput, Vec<String>> {
+    if let Some(outdir) = &opts.outdir {
+        let path = Path::new(outdir).join(output.filename());
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|error| vec![format!("Failed to create output directory: {error}")])?;
+        }
+        fs::write(&path, output.content_as_bytes())
+            .map_err(|error| vec![format!("Failed to write bundle output: {error}")])?;
+    }
+
+    match output {
+        Output::Chunk(chunk) => {
+            let sourcemap = if opts.sourcemap {
+                chunk
+                    .map
+                    .as_ref()
+                    .map(oxc_sourcemap::SourceMap::to_json_string)
+                    .map(|json| relativize_sourcemap_sources(json, cwd))
+                    .transpose()?
+            } else {
+                None
+            };
+
+            Ok(BundleRunOutput {
+                r#type: if chunk.is_entry {
+                    atoms::entry()
+                } else {
+                    atoms::chunk()
+                },
+                name: Some(chunk.name.to_string()),
+                file_name: chunk.filename.to_string(),
+                path: output_path(opts, &chunk.filename),
+                code: Some(chunk.code.clone()),
+                source: None,
+                sourcemap,
+                imports: chunk.imports.iter().map(ToString::to_string).collect(),
+                dynamic_imports: chunk
+                    .dynamic_imports
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect(),
+                exports: chunk.exports.iter().map(ToString::to_string).collect(),
+            })
+        }
+        Output::Asset(asset) => Ok(BundleRunOutput {
+            r#type: atoms::asset(),
+            name: asset.names.first().cloned(),
+            file_name: asset.filename.to_string(),
+            path: output_path(opts, &asset.filename),
+            code: None,
+            source: Some(match &asset.source {
+                StrOrBytes::Str(source) => source.clone(),
+                StrOrBytes::Bytes(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+            }),
+            sourcemap: None,
+            imports: Vec::new(),
+            dynamic_imports: Vec::new(),
+            exports: Vec::new(),
+        }),
+    }
+}
+
+fn output_path(opts: &BundleOptions<'_>, filename: &str) -> Option<String> {
+    opts.outdir.as_ref().map(|outdir| {
+        Path::new(outdir)
+            .join(filename)
+            .to_string_lossy()
+            .to_string()
+    })
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn bundle_run<'a>(env: Env<'a>, opts_term: Term<'a>) -> NifResult<Term<'a>> {
+    let opts = BundleOptions::from_term(opts_term);
+
+    match bundle_run_project(&opts) {
+        Ok(result) => Ok((atoms::ok(), result).encode(env)),
+        Err(errors) => error_to_term(env, &errors),
+    }
+}
+
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn bundle<'a>(
     env: Env<'a>,
     files: Vec<(String, Term<'a>)>,
     opts_term: Term<'a>,
 ) -> NifResult<Term<'a>> {
-    let opts = decode_options::<BundleOptions>(opts_term);
+    let opts = BundleOptions::from_term(opts_term);
 
     match bundle_virtual_project(files, &opts) {
         Ok((code, Some(sourcemap))) => Ok((
@@ -456,7 +671,7 @@ pub fn bundle<'a>(
 
 #[rustler::nif(schedule = "DirtyCpu")]
 pub fn bundle_entry<'a>(env: Env<'a>, entry: String, opts_term: Term<'a>) -> NifResult<Term<'a>> {
-    let opts = decode_options::<BundleOptions>(opts_term);
+    let opts = BundleOptions::from_term(opts_term);
 
     match bundle_filesystem_entry(entry, &opts) {
         Ok((code, Some(sourcemap))) => Ok((

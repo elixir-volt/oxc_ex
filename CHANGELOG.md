@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.16.0
+
+### Added
+
+- Add `OXC.Bundle`, a composable bundling pipeline that returns all Rolldown chunks and assets from multi-entry builds.
+- Add bundle output metadata for generated chunks, assets, imports, dynamic imports, exports, sourcemaps, and optional output paths.
+
+### Changed
+
+- Upgrade Rolldown bundling dependencies to 1.1.
+- Decode native options directly from BEAM maps instead of routing through `serde_json`.
+
+### Fixed
+
+- Prevent `serde_json::Number` internals from leaking into parsed AST terms when dependencies enable arbitrary-precision JSON numbers.
+- Fix code generation for `if` statements with nil `alternate` branches.
+
 ## 0.15.1
 
 ### Fixed

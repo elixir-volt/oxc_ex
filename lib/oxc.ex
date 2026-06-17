@@ -475,45 +475,45 @@ defmodule OXC do
 
   defp normalize_transform_options(opts) do
     %{
-      "jsx" => normalize_jsx_runtime(Keyword.get(opts, :jsx, :automatic)),
-      "jsx_factory" => Keyword.get(opts, :jsx_factory, ""),
-      "jsx_fragment" => Keyword.get(opts, :jsx_fragment, ""),
-      "import_source" => Keyword.get(opts, :import_source, ""),
-      "target" => Keyword.get(opts, :target, ""),
-      "sourcemap" => Keyword.get(opts, :sourcemap, false)
+      jsx: normalize_jsx_runtime(Keyword.get(opts, :jsx, :automatic)),
+      jsx_factory: Keyword.get(opts, :jsx_factory, ""),
+      jsx_fragment: Keyword.get(opts, :jsx_fragment, ""),
+      import_source: Keyword.get(opts, :import_source, ""),
+      target: Keyword.get(opts, :target, ""),
+      sourcemap: Keyword.get(opts, :sourcemap, false)
     }
   end
 
   defp normalize_minify_options(opts) do
-    %{"mangle" => Keyword.get(opts, :mangle, true)}
+    %{mangle: Keyword.get(opts, :mangle, true)}
   end
 
   defp normalize_bundle_options(opts) do
     %{
-      "entry" => Keyword.get(opts, :entry, ""),
-      "cwd" => Keyword.get(opts, :cwd, ""),
-      "format" => opts |> Keyword.get(:format, :iife) |> Atom.to_string(),
-      "exports" => opts |> Keyword.get(:exports, :auto) |> Atom.to_string(),
-      "minify" => Keyword.get(opts, :minify, false),
-      "treeshake" => Keyword.get(opts, :treeshake, false),
-      "banner" => Keyword.get(opts, :banner),
-      "footer" => Keyword.get(opts, :footer),
-      "preamble" => Keyword.get(opts, :preamble),
-      "define" => Keyword.get(opts, :define, %{}),
-      "module_types" => normalize_module_types(Keyword.get(opts, :module_types, %{})),
-      "external" => Keyword.get(opts, :external, []),
-      "preserve_entry_signatures" =>
+      entry: Keyword.get(opts, :entry, ""),
+      cwd: Keyword.get(opts, :cwd, ""),
+      format: opts |> Keyword.get(:format, :iife) |> Atom.to_string(),
+      exports: opts |> Keyword.get(:exports, :auto) |> Atom.to_string(),
+      minify: Keyword.get(opts, :minify, false),
+      treeshake: Keyword.get(opts, :treeshake, false),
+      banner: Keyword.get(opts, :banner),
+      footer: Keyword.get(opts, :footer),
+      preamble: Keyword.get(opts, :preamble),
+      define: Keyword.get(opts, :define, %{}),
+      module_types: normalize_module_types(Keyword.get(opts, :module_types, %{})),
+      external: Keyword.get(opts, :external, []),
+      preserve_entry_signatures:
         normalize_preserve_entry_signatures(Keyword.get(opts, :preserve_entry_signatures)),
-      "conditions" => Keyword.get(opts, :conditions, []),
-      "main_fields" => Keyword.get(opts, :main_fields, []),
-      "modules" => Keyword.get(opts, :modules, []),
-      "sourcemap" => Keyword.get(opts, :sourcemap, false),
-      "drop_console" => Keyword.get(opts, :drop_console, false),
-      "jsx" => normalize_jsx_runtime(Keyword.get(opts, :jsx, :automatic)),
-      "jsx_factory" => Keyword.get(opts, :jsx_factory, ""),
-      "jsx_fragment" => Keyword.get(opts, :jsx_fragment, ""),
-      "import_source" => Keyword.get(opts, :import_source, ""),
-      "target" => Keyword.get(opts, :target, "")
+      conditions: Keyword.get(opts, :conditions, []),
+      main_fields: Keyword.get(opts, :main_fields, []),
+      modules: Keyword.get(opts, :modules, []),
+      sourcemap: Keyword.get(opts, :sourcemap, false),
+      drop_console: Keyword.get(opts, :drop_console, false),
+      jsx: normalize_jsx_runtime(Keyword.get(opts, :jsx, :automatic)),
+      jsx_factory: Keyword.get(opts, :jsx_factory, ""),
+      jsx_fragment: Keyword.get(opts, :jsx_fragment, ""),
+      import_source: Keyword.get(opts, :import_source, ""),
+      target: Keyword.get(opts, :target, "")
     }
   end
 

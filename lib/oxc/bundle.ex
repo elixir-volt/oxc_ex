@@ -46,7 +46,14 @@ defmodule OXC.Bundle do
     |> apply_opts(Keyword.delete(opts, :entries))
   end
 
-  @spec entry(t(), Entry.t() | map() | tuple() | String.t()) :: t()
+  @spec entry(
+          t(),
+          Entry.t()
+          | map()
+          | {String.t(), String.t()}
+          | {String.t(), String.t(), iodata()}
+          | String.t()
+        ) :: t()
   def entry(%__MODULE__{} = bundle, entry), do: entries(bundle, bundle.entries ++ [entry])
 
   def file(%__MODULE__{} = bundle, {path, source}),
@@ -54,7 +61,13 @@ defmodule OXC.Bundle do
 
   def files(%__MODULE__{} = bundle, files) when is_list(files), do: %{bundle | files: files}
 
-  @spec entries(t(), [Entry.t() | map() | tuple() | String.t()]) :: t()
+  @spec entries(t(), [
+          Entry.t()
+          | map()
+          | {String.t(), String.t()}
+          | {String.t(), String.t(), iodata()}
+          | String.t()
+        ]) :: t()
   def entries(%__MODULE__{} = bundle, entries) when is_list(entries) do
     %{bundle | entries: Enum.map(entries, &Entry.new/1)}
   end

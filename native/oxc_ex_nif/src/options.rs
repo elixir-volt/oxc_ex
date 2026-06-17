@@ -4,10 +4,8 @@ use rustler::{types::map::MapIterator, ListIterator, Term};
 
 use crate::atoms;
 
-fn get_key<'a>(term: Term<'a>, atom_key: rustler::Atom, string_key: &str) -> Option<Term<'a>> {
-    term.map_get(atom_key)
-        .ok()
-        .or_else(|| term.map_get(string_key).ok())
+fn get_key<'a>(term: Term<'a>, atom_key: rustler::Atom, _string_key: &str) -> Option<Term<'a>> {
+    term.map_get(atom_key).ok()
 }
 
 fn get_bool(term: Term<'_>, atom_key: rustler::Atom, string_key: &str) -> Option<bool> {

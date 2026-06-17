@@ -11,9 +11,6 @@ defmodule OXC.Bundle.Entry do
   def new({name, import}) when is_binary(name) and is_binary(import),
     do: %__MODULE__{name: name, import: import}
 
-  def new({import, source}) when is_binary(import),
-    do: %__MODULE__{import: import, source: source}
-
   def new({name, import, source}), do: %__MODULE__{name: name, import: import, source: source}
 
   def new(%{import: import} = map) do

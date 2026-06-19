@@ -421,7 +421,12 @@ fn is_import_meta_url_argument(argument: &Argument<'_>) -> bool {
 }
 
 fn is_import_meta_url(member: &oxc_ast::ast::StaticMemberExpression<'_>) -> bool {
-    is_import_meta_member(member, "url")
+    is_import_meta_member(member, "url") || is_generated_import_meta_url(member)
+}
+
+fn is_generated_import_meta_url(member: &oxc_ast::ast::StaticMemberExpression<'_>) -> bool {
+    member.property.name == "url"
+        && matches!(&member.object, Expression::ObjectExpression(object) if object.properties.is_empty())
 }
 
 fn is_import_meta_member(

@@ -446,6 +446,15 @@ defmodule OXCTest do
       assert binary_part(source, start, finish - start) == ~s|"./shared.js"|
     end
 
+    test "workers accept generated import.meta.url bases" do
+      source = ~s|new Worker(new URL("./worker.js", {}.url), { type: "module" })|
+
+      assert {:ok, [%{specifier: "./worker.js", kind: :worker, start: start, end: finish}]} =
+               OXC.select(source, "test.js", :workers)
+
+      assert binary_part(source, start, finish - start) == ~s|"./worker.js"|
+    end
+
     test "workers ignore direct string constructors" do
       source = ~s|new Worker("./worker.js")|
 

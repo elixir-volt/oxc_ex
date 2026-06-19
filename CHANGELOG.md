@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+## 0.17.0 - 2026-06-19
+
+### Breaking changes
+
+- Remove `OXC.imports/2`, `OXC.imports!/2`, `OXC.collect_imports/2`, and `OXC.collect_imports!/2`; use `OXC.select/3` with selector atoms instead.
+
+### Added
+
+- Add `OXC.select/3` for compact parser-backed event selection.
+- Add selector atoms for import sources, import specifiers, asset URLs, workers, glob imports, and `import.meta.env` references.
+
+### Changed
+
+- `OXC.rewrite_specifiers/3` now uses parser-backed selector events internally.
+- Native import/source-reference selection now uses the shared `rustler_match_spec` crate.
+
+### Fixed
+
+- Recognize generated `{}.url` bases when selecting worker URL references from bundled output.
+
 ## 0.16.0
 
 ### Added

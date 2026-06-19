@@ -64,6 +64,10 @@ mod atoms {
         shared_worker,
         glob_import,
         import_meta_env,
+        dynamic_import_template,
+        template_start,
+        template_end,
+        pattern,
         chunk,
         dynamic_imports,
     }

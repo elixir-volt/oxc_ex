@@ -504,6 +504,32 @@ defmodule OXCTest do
       assert OXC.select(source, "test.js", :import_meta_env) == {:ok, []}
     end
 
+    test "selects template-literal dynamic import maps by selector name" do
+      source = ~s|const view = import(`./pages/${name}.js?raw`)|
+
+      assert {:ok,
+              [
+                %{
+                  pattern: "./pages/*.js?raw",
+                  start: start,
+                  end: finish,
+                  template_start: template_start,
+                  template_end: template_end
+                }
+              ]} = OXC.select(source, "test.js", :dynamic_import_templates)
+
+      assert binary_part(source, start, finish - start) == ~s|import(`./pages/${name}.js?raw`)|
+
+      assert binary_part(source, template_start, template_end - template_start) ==
+               ~s|`./pages/${name}.js?raw`|
+    end
+
+    test "dynamic import template selector ignores static string imports and import attributes" do
+      source = ~s|import("./static.js"); import(`./${name}.js`, { with: { type: "json" } })|
+
+      assert OXC.select(source, "test.js", :dynamic_import_templates) == {:ok, []}
+    end
+
     test "returns errors for invalid syntax" do
       assert {:error, errors} = OXC.select("const = ;", "bad.js", :import_specifiers)
       assert is_list(errors)

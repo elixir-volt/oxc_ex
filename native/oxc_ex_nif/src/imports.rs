@@ -1,5 +1,7 @@
 use oxc_allocator::Allocator;
-use oxc_ast::ast::{Argument, ArrayExpressionElement, Expression, ImportOrExportKind};
+use oxc_ast::ast::{
+    Argument, ArrayExpressionElement, Expression, ImportOrExportKind, TemplateLiteral,
+};
 use oxc_ast_visit::walk;
 use oxc_ast_visit::Visit;
 use oxc_parser::Parser;
@@ -43,12 +45,21 @@ struct ImportMetaEnvInfo {
     r#end: u32,
 }
 
+struct DynamicImportTemplateInfo {
+    pattern: String,
+    start: u32,
+    r#end: u32,
+    template_start: u32,
+    template_end: u32,
+}
+
 struct ImportCollector {
     imports: Vec<ImportInfo>,
     asset_urls: Vec<AssetUrlInfo>,
     workers: Vec<WorkerInfo>,
     glob_imports: Vec<GlobImportInfo>,
     import_meta_env: Vec<ImportMetaEnvInfo>,
+    dynamic_import_templates: Vec<DynamicImportTemplateInfo>,
 }
 
 impl<'a> MatchEvent<'a> for &'a AssetUrlInfo {
@@ -169,6 +180,43 @@ impl<'a> MatchEvent<'a> for &'a ImportMetaEnvInfo {
             Some(ValueRef::U64(self.start.into()))
         } else if name == atoms::r#end() {
             Some(ValueRef::U64(self.r#end.into()))
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> MatchEvent<'a> for &'a DynamicImportTemplateInfo {
+    fn tag(&self) -> Atom {
+        atoms::dynamic_import_template()
+    }
+
+    fn arity(&self) -> usize {
+        6
+    }
+
+    fn positional_field(&self, index: usize) -> Option<ValueRef<'a>> {
+        match index {
+            1 => Some(ValueRef::Str(self.pattern.as_str())),
+            2 => Some(ValueRef::U64(self.start.into())),
+            3 => Some(ValueRef::U64(self.r#end.into())),
+            4 => Some(ValueRef::U64(self.template_start.into())),
+            5 => Some(ValueRef::U64(self.template_end.into())),
+            _ => None,
+        }
+    }
+
+    fn field(&self, name: Atom) -> Option<ValueRef<'a>> {
+        if name == atoms::pattern() {
+            Some(ValueRef::Str(self.pattern.as_str()))
+        } else if name == atoms::start() {
+            Some(ValueRef::U64(self.start.into()))
+        } else if name == atoms::r#end() {
+            Some(ValueRef::U64(self.r#end.into()))
+        } else if name == atoms::template_start() {
+            Some(ValueRef::U64(self.template_start.into()))
+        } else if name == atoms::template_end() {
+            Some(ValueRef::U64(self.template_end.into()))
         } else {
             None
         }
@@ -303,14 +351,28 @@ impl<'a> Visit<'a> for ImportCollector {
     }
 
     fn visit_import_expression(&mut self, expr: &oxc_ast::ast::ImportExpression<'a>) {
-        if let Expression::StringLiteral(lit) = &expr.source {
-            self.imports.push(ImportInfo {
-                specifier: lit.value.to_string(),
-                r#type: atoms::dynamic(),
-                kind: atoms::import(),
-                start: lit.span.start,
-                r#end: lit.span.end,
-            });
+        match &expr.source {
+            Expression::StringLiteral(lit) => {
+                self.imports.push(ImportInfo {
+                    specifier: lit.value.to_string(),
+                    r#type: atoms::dynamic(),
+                    kind: atoms::import(),
+                    start: lit.span.start,
+                    r#end: lit.span.end,
+                });
+            }
+            Expression::TemplateLiteral(template) if expr.options.is_none() => {
+                if let Some(pattern) = dynamic_import_pattern(template) {
+                    self.dynamic_import_templates.push(DynamicImportTemplateInfo {
+                        pattern,
+                        start: expr.span.start,
+                        r#end: expr.span.end,
+                        template_start: template.span.start,
+                        template_end: template.span.end,
+                    });
+                }
+            }
+            _ => {}
         }
         walk::walk_import_expression(self, expr);
     }
@@ -340,6 +402,7 @@ pub fn select<'a>(
         workers: Vec::new(),
         glob_imports: Vec::new(),
         import_meta_env: Vec::new(),
+        dynamic_import_templates: Vec::new(),
     };
     collector.visit_program(&ret.program);
 
@@ -365,7 +428,32 @@ pub fn select<'a>(
         selector.run_event(env, &import_meta_env, &mut out)?;
     }
 
+    for dynamic_import_template in &collector.dynamic_import_templates {
+        selector.run_event(env, &dynamic_import_template, &mut out)?;
+    }
+
     Ok((atoms::ok(), out).encode(env))
+}
+
+fn dynamic_import_pattern(template: &TemplateLiteral<'_>) -> Option<String> {
+    if template.expressions.is_empty() {
+        return None;
+    }
+
+    let mut pattern = String::new();
+
+    for (index, quasi) in template.quasis.iter().enumerate() {
+        match &quasi.value.cooked {
+            Some(cooked) => pattern.push_str(cooked.as_str()),
+            None => pattern.push_str(quasi.value.raw.as_str()),
+        }
+
+        if index + 1 < template.quasis.len() {
+            pattern.push('*');
+        }
+    }
+
+    Some(pattern)
 }
 
 fn is_import_meta_glob_call(expr: &Expression<'_>) -> bool {

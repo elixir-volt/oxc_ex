@@ -243,6 +243,7 @@ defmodule OXC do
     * `:workers` — `new Worker(...)` and `new SharedWorker(...)` maps with `:specifier`, `:kind`, `:start`, and `:end`
     * `:glob_imports` — `import.meta.glob(...)` maps with `:patterns`, `:start`, and `:end`
     * `:import_meta_env` — `import.meta.env` maps with `:start` and `:end`
+    * `:dynamic_import_templates` — template-literal `import(...)` maps with `:pattern`, `:start`, `:end`, `:template_start`, and `:template_end`
 
   ## Examples
 
@@ -305,6 +306,15 @@ defmodule OXC do
       {{:import_meta_env, :"$1", :"$2"}, [],
        [
          %{start: :"$1", end: :"$2"}
+       ]}
+    ]
+  end
+
+  defp selector_spec(:dynamic_import_templates) do
+    [
+      {{:dynamic_import_template, :"$1", :"$2", :"$3", :"$4", :"$5"}, [],
+       [
+         %{pattern: :"$1", start: :"$2", end: :"$3", template_start: :"$4", template_end: :"$5"}
        ]}
     ]
   end

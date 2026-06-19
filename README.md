@@ -254,35 +254,16 @@ end
   custom_rules: [{MyApp.NoConsoleLog, :warn}])
 ```
 
-### Import Extraction
+### Parser Event Selection
 
-Fast NIF-level extraction of import specifiers — skips full AST serialization:
-
-```elixir
-{:ok, imports} = OXC.imports("import { ref } from 'vue'\nimport { h } from 'preact'", "test.ts")
-# ["vue", "preact"]
-```
-
-Type-only imports are excluded automatically:
-
-```elixir
-{:ok, imports} = OXC.imports("import type { Ref } from 'vue'\nimport { ref } from 'vue'", "test.ts")
-# ["vue"]
-```
-
-### Typed Import Analysis
-
-Collect imports with type information, byte offsets, and kind:
+Select compact parser-backed events without serializing the full AST:
 
 ```elixir
 source = "import { ref } from 'vue'\nexport { foo } from './foo'\nimport('./lazy')"
-{:ok, imports} = OXC.collect_imports(source, "test.js")
-# [
-#   %{specifier: "vue", type: :static, kind: :import, start: 20, end: 25},
-#   %{specifier: "./foo", type: :static, kind: :export, start: 47, end: 54},
-#   %{specifier: "./lazy", type: :dynamic, kind: :import, start: 62, end: 70}
-# ]
+{:ok, refs} = OXC.select(source, "test.js", :import_sources)
 ```
+
+Use `:import_specifiers` when only source strings are needed.
 
 ### Rewrite Specifiers
 
@@ -432,7 +413,6 @@ ast = OXC.parse!("const x = 1", "test.js")
 js = OXC.transform!("const x: number = 42", "test.ts")
 min = OXC.minify!("const x = 1 + 2;", "test.js")
 js = OXC.codegen!(ast)
-imports = OXC.imports!("import { ref } from 'vue'", "test.ts")
 ```
 
 ### Error Handling

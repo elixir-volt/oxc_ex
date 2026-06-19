@@ -390,135 +390,15 @@ defmodule OXCTest do
     end
   end
 
-  describe "imports/2" do
-    test "extracts import specifiers" do
-      {:ok, imports} =
-        OXC.imports("import { ref } from 'vue'\nimport { h } from 'vue'", "test.ts")
-
-      assert imports == ["vue", "vue"]
-    end
-
-    test "excludes type-only imports" do
-      {:ok, imports} =
-        OXC.imports("import type { Ref } from 'vue'\nimport { ref } from 'vue'", "test.ts")
-
-      assert imports == ["vue"]
-    end
-
-    test "handles no imports" do
-      {:ok, imports} = OXC.imports("const x = 1", "test.js")
-      assert imports == []
-    end
-
-    test "returns errors for invalid syntax" do
-      {:error, errors} = OXC.imports("const = ;", "bad.js")
-      assert is_list(errors)
-      assert length(errors) > 0
-      assert %{message: _} = hd(errors)
-    end
-  end
-
-  describe "collect_imports/2" do
-    test "collects static imports with type info" do
-      source = "import { ref } from 'vue'\nimport a from './utils'"
-      {:ok, imports} = OXC.collect_imports(source, "test.js")
-
-      assert length(imports) == 2
-
-      [vue_import, utils_import] = imports
-      assert vue_import.specifier == "vue"
-      assert vue_import.type == :static
-      assert vue_import.kind == :import
-
-      assert utils_import.specifier == "./utils"
-      assert utils_import.type == :static
-      assert utils_import.kind == :import
-    end
-
-    test "collects export declarations" do
-      source = "export { foo } from './foo'\nexport * from './bar'"
-      {:ok, imports} = OXC.collect_imports(source, "test.js")
-
-      assert length(imports) == 2
-
-      [named_export, all_export] = imports
-      assert named_export.specifier == "./foo"
-      assert named_export.kind == :export
-
-      assert all_export.specifier == "./bar"
-      assert all_export.kind == :export_all
-    end
-
-    test "collects dynamic imports" do
-      source = "const m = import('./lazy')"
-      {:ok, imports} = OXC.collect_imports(source, "test.js")
-
-      assert [%{specifier: "./lazy", type: :dynamic, kind: :import}] = imports
-    end
-
-    test "excludes type-only imports" do
-      source = "import type { Ref } from 'vue'\nimport { ref } from 'vue'"
-      {:ok, imports} = OXC.collect_imports(source, "test.ts")
-
-      assert length(imports) == 1
-      assert hd(imports).specifier == "vue"
-    end
-
-    test "includes start/end positions" do
-      source = "import { ref } from 'vue'"
-      {:ok, [import]} = OXC.collect_imports(source, "test.js")
-
-      assert import.start > 0
-      assert import.end > import.start
-      assert binary_part(source, import.start, import.end - import.start) == "'vue'"
-    end
-
-    test "handles mixed static and dynamic imports" do
-      source = """
-      import { ref } from 'vue'
-      export { foo } from './foo'
-      const lazy = import('./lazy')
-      """
-
-      {:ok, imports} = OXC.collect_imports(source, "test.js")
-      assert length(imports) == 3
-
-      types = Enum.map(imports, & &1.type)
-      assert :static in types
-      assert :dynamic in types
-    end
-
-    test "finds deeply nested dynamic imports" do
-      source = "function load() { if (true) { return import('./deep') } }"
-      {:ok, imports} = OXC.collect_imports(source, "test.js")
-      assert [%{specifier: "./deep", type: :dynamic}] = imports
-    end
-
-    test "returns errors for invalid syntax" do
-      {:error, errors} = OXC.collect_imports("const = ;", "bad.js")
-      assert is_list(errors)
-      assert length(errors) > 0
-      assert %{message: _} = hd(errors)
-    end
-  end
-
   describe "select/3" do
-    test "selects import-source events with match specs" do
-      import RustlerMatchSpec
-
+    test "selects import source maps by selector name" do
       source = """
       import { ref } from 'vue'
       export { foo } from './foo'
       const lazy = import('./lazy')
       """
 
-      spec =
-        match_spec do
-          {:import_source, specifier, ref_type, kind, start, finish} ->
-            %{specifier: specifier, type: ref_type, kind: kind, start: start, end: finish}
-        end
-
-      assert {:ok, refs} = OXC.select(source, "test.js", spec)
+      assert {:ok, refs} = OXC.select(source, "test.js", :import_sources)
 
       assert [
                %{specifier: "vue", type: :static, kind: :import},
@@ -527,29 +407,14 @@ defmodule OXCTest do
              ] = refs
     end
 
-    test "selects only matching import-source events" do
-      import RustlerMatchSpec
-
+    test "selects import specifier strings by selector name" do
       source = "import { ref } from 'vue'\nconst lazy = import('./lazy')"
 
-      spec =
-        match_spec do
-          {:import_source, specifier, :dynamic, :import, _start, _finish} ->
-            specifier
-        end
-
-      assert OXC.select(source, "test.js", spec) == {:ok, ["./lazy"]}
+      assert OXC.select(source, "test.js", :import_specifiers) == {:ok, ["vue", "./lazy"]}
     end
 
     test "returns errors for invalid syntax" do
-      import RustlerMatchSpec
-
-      spec =
-        match_spec do
-          {:import_source, specifier, _type, _kind, _start, _finish} -> specifier
-        end
-
-      assert {:error, errors} = OXC.select("const = ;", "bad.js", spec)
+      assert {:error, errors} = OXC.select("const = ;", "bad.js", :import_specifiers)
       assert is_list(errors)
       assert %{message: _} = hd(errors)
     end
@@ -824,10 +689,9 @@ defmodule OXCTest do
       assert js == "const x = 1;\n"
       assert {:ok, min} = OXC.minify(["const x = ", "1 + 2;"], "test.js")
       assert min =~ "const"
-      assert {:ok, ["vue"]} = OXC.imports(["import { ref } ", "from 'vue'"], "test.js")
 
       assert {:ok, [%{specifier: "vue"}]} =
-               OXC.collect_imports(["import { ref } ", "from 'vue'"], "test.js")
+               OXC.select(["import { ref } ", "from 'vue'"], "test.js", :import_sources)
     end
 
     test "batch and patch APIs accept iodata" do

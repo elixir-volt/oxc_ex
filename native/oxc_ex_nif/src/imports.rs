@@ -1,17 +1,16 @@
 use oxc_allocator::Allocator;
-use oxc_ast::ast::{Expression, ImportOrExportKind, Statement};
+use oxc_ast::ast::{Expression, ImportOrExportKind};
 use oxc_ast_visit::walk;
 use oxc_ast_visit::Visit;
 use oxc_parser::Parser;
 use oxc_span::SourceType;
-use rustler::{Atom, Encoder, Env, NifMap, NifResult, Term};
+use rustler::{Atom, Encoder, Env, NifResult, Term};
 use rustler_match_spec::{MatchEvent, Selector, ValueRef};
 
 use crate::atoms;
 use crate::error::{error_to_term, format_errors};
 use crate::parse::{binary_to_str, source_from_term};
 
-#[derive(NifMap)]
 struct ImportInfo {
     specifier: String,
     r#type: rustler::Atom,
@@ -113,57 +112,6 @@ impl<'a> Visit<'a> for ImportCollector {
         }
         walk::walk_import_expression(self, expr);
     }
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn imports<'a>(env: Env<'a>, source_term: Term<'a>, filename: &str) -> NifResult<Term<'a>> {
-    let source_binary = source_from_term(source_term)?;
-    let source = binary_to_str(&source_binary)?;
-    let allocator = Allocator::default();
-    let source_type = SourceType::from_path(filename).unwrap_or_default();
-    let ret = Parser::new(&allocator, source, source_type).parse();
-
-    if !ret.errors.is_empty() {
-        return error_to_term(env, &format_errors(&ret.errors));
-    }
-
-    let specifiers: Vec<String> = ret
-        .program
-        .body
-        .iter()
-        .filter_map(|stmt| match stmt {
-            Statement::ImportDeclaration(decl) if decl.import_kind != ImportOrExportKind::Type => {
-                Some(decl.source.value.to_string())
-            }
-            _ => None,
-        })
-        .collect();
-
-    Ok((atoms::ok(), rustler::SerdeTerm(specifiers)).encode(env))
-}
-
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn collect_imports<'a>(
-    env: Env<'a>,
-    source_term: Term<'a>,
-    filename: &str,
-) -> NifResult<Term<'a>> {
-    let source_binary = source_from_term(source_term)?;
-    let source = binary_to_str(&source_binary)?;
-    let allocator = Allocator::default();
-    let source_type = SourceType::from_path(filename).unwrap_or_default();
-    let ret = Parser::new(&allocator, source, source_type).parse();
-
-    if !ret.errors.is_empty() {
-        return error_to_term(env, &format_errors(&ret.errors));
-    }
-
-    let mut collector = ImportCollector {
-        imports: Vec::new(),
-    };
-    collector.visit_program(&ret.program);
-
-    Ok((atoms::ok(), collector.imports).encode(env))
 }
 
 #[rustler::nif(schedule = "DirtyCpu")]

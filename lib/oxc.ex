@@ -233,120 +233,44 @@ defmodule OXC do
   end
 
   @doc """
-  Extract import specifiers from JavaScript/TypeScript source.
+  Select compact parser events by name.
 
-  Faster than `parse/2` + `collect/2` — skips full AST serialization
-  and returns only the import source strings. Type-only imports
-  (`import type { ... }`) are excluded.
+  Available selectors:
 
-  ## Examples
-
-      iex> {:ok, imports} = OXC.imports("import { ref } from 'vue'\\nimport type { Ref } from 'vue'", "test.ts")
-      iex> imports
-      ["vue"]
-  """
-  @spec imports(source(), String.t()) :: {:ok, [String.t()]} | {:error, [error()]}
-  def imports(source, filename) do
-    case OXC.Native.imports(source, filename) do
-      {:ok, list} -> {:ok, list}
-      {:error, errors} -> {:error, atomize_term_keys(errors)}
-    end
-  end
-
-  @doc "Like `imports/2` but raises on errors."
-  @spec imports!(source(), String.t()) :: [String.t()]
-  def imports!(source, filename) do
-    case imports(source, filename) do
-      {:ok, list} ->
-        list
-
-      {:error, errors} ->
-        raise Error, message: "OXC imports error: #{inspect(errors)}", errors: errors
-    end
-  end
-
-  @doc """
-  Analyze imports with type information.
-
-  Returns `{:ok, list}` where each element is a map with:
-    * `:specifier` — the import source string (e.g. `"vue"`, `"./utils"`)
-    * `:type` — `:static` or `:dynamic`
-    * `:kind` — `:import`, `:export`, or `:export_all`
-    * `:start` — byte offset of the specifier string literal (including quote)
-    * `:end` — byte offset of the end of the specifier string literal
-
-  Type-only imports/exports (`import type { ... }`, `export type { ... }`)
-  are excluded.
+    * `:import_sources` — maps with `:specifier`, `:type`, `:kind`, `:start`, and `:end`
+    * `:import_specifiers` — specifier strings only
 
   ## Examples
 
-      iex> source = "import { ref } from 'vue'\\nexport { foo } from './bar'\\nimport('./lazy')"
-      iex> {:ok, imports} = OXC.collect_imports(source, "test.js")
-      iex> Enum.map(imports, & &1.specifier)
-      ["vue", "./bar", "./lazy"]
-      iex> Enum.map(imports, & &1.type)
-      [:static, :static, :dynamic]
-      iex> Enum.map(imports, & &1.kind)
-      [:import, :export, :import]
-  """
-  @spec collect_imports(source(), String.t()) ::
-          {:ok,
-           [
-             %{
-               specifier: String.t(),
-               type: :static | :dynamic,
-               kind: :import | :export | :export_all,
-               start: non_neg_integer(),
-               end: non_neg_integer()
-             }
-           ]}
-          | {:error, [error()]}
-  def collect_imports(source, filename) do
-    case OXC.Native.collect_imports(source, filename) do
-      {:ok, list} -> {:ok, list}
-      {:error, errors} -> {:error, atomize_term_keys(errors)}
-    end
-  end
-
-  @doc """
-  Select compact parser events with a match-spec-shaped selector.
-
-  The initial event stream contains import-like source references with the tuple
-  shape:
-
-      {:import_source, specifier, type, kind, start, end}
-
-  where `type` is `:static` or `:dynamic`, and `kind` is `:import`, `:export`,
-  or `:export_all`.
-
-  ## Examples
-
-      iex> import RustlerMatchSpec
-      iex> spec = match_spec do
-      ...>   {:import_source, specifier, :static, kind, _start, _end} -> {kind, specifier}
-      ...> end
-      iex> {:ok, refs} = OXC.select("import { ref } from 'vue'", "test.js", spec)
+      iex> {:ok, refs} = OXC.select("import { ref } from 'vue'", "test.js", :import_sources)
       iex> refs
-      [import: "vue"]
+      [%{specifier: "vue", type: :static, kind: :import, start: 20, end: 25}]
   """
-  @spec select(source(), String.t(), list()) :: {:ok, list()} | {:error, [error()]}
-  def select(source, filename, spec) when is_list(spec) do
-    case OXC.Native.select(source, filename, spec) do
+  @spec select(source(), String.t(), atom()) :: {:ok, list()} | {:error, [error()]}
+  def select(source, filename, selector) when is_atom(selector) do
+    case OXC.Native.select(source, filename, selector_spec(selector)) do
       {:ok, results} -> {:ok, results}
       {:error, errors} -> {:error, atomize_term_keys(errors)}
     end
   end
 
-  @doc "Like `collect_imports/2` but raises on errors."
-  @spec collect_imports!(source(), String.t()) :: [map()]
-  def collect_imports!(source, filename) do
-    case collect_imports(source, filename) do
-      {:ok, list} ->
-        list
+  defp selector_spec(:import_sources) do
+    [
+      {{:import_source, :"$1", :"$2", :"$3", :"$4", :"$5"}, [],
+       [
+         %{specifier: :"$1", type: :"$2", kind: :"$3", start: :"$4", end: :"$5"}
+       ]}
+    ]
+  end
 
-      {:error, errors} ->
-        raise Error, message: "OXC collect_imports error: #{inspect(errors)}", errors: errors
-    end
+  defp selector_spec(:import_specifiers) do
+    [
+      {{:import_source, :"$1", :"$2", :"$3", :"$4", :"$5"}, [], [:"$1"]}
+    ]
+  end
+
+  defp selector_spec(selector) do
+    raise ArgumentError, "unknown OXC selector #{inspect(selector)}"
   end
 
   @doc """
@@ -377,12 +301,12 @@ defmodule OXC do
   def rewrite_specifiers(source, filename, fun) when is_function(fun, 1) do
     source = IO.iodata_to_binary(source)
 
-    case collect_imports(source, filename) do
+    case select(source, filename, :import_sources) do
       {:ok, imports} ->
         patches =
-          Enum.reduce(imports, [], fn %{specifier: spec, start: s, end: e}, acc ->
-            case fun.(spec) do
-              {:rewrite, new} -> [%{start: s + 1, end: e - 1, change: new} | acc]
+          Enum.reduce(imports, [], fn %{specifier: specifier, start: start, end: finish}, acc ->
+            case fun.(specifier) do
+              {:rewrite, new} -> [%{start: start + 1, end: finish - 1, change: new} | acc]
               :keep -> acc
             end
           end)

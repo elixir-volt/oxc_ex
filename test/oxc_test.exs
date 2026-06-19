@@ -479,6 +479,22 @@ defmodule OXCTest do
       assert OXC.select(source, "test.js", :glob_imports) == {:ok, []}
     end
 
+    test "selects import.meta.env references by selector name" do
+      source = ~s|if (import.meta.env.DEV) console.log(import.meta.env.MODE)|
+
+      assert {:ok, [%{start: start, end: finish}, %{start: start2, end: finish2}]} =
+               OXC.select(source, "test.js", :import_meta_env)
+
+      assert binary_part(source, start, finish - start) == "import.meta.env"
+      assert binary_part(source, start2, finish2 - start2) == "import.meta.env"
+    end
+
+    test "import.meta.env selector ignores other import.meta properties" do
+      source = ~s|console.log(import.meta.url)|
+
+      assert OXC.select(source, "test.js", :import_meta_env) == {:ok, []}
+    end
+
     test "returns errors for invalid syntax" do
       assert {:error, errors} = OXC.select("const = ;", "bad.js", :import_specifiers)
       assert is_list(errors)

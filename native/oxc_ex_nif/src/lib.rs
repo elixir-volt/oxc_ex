@@ -63,6 +63,7 @@ mod atoms {
         worker,
         shared_worker,
         glob_import,
+        import_meta_env,
         chunk,
         dynamic_imports,
     }

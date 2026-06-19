@@ -38,11 +38,17 @@ struct GlobImportInfo {
     r#end: u32,
 }
 
+struct ImportMetaEnvInfo {
+    start: u32,
+    r#end: u32,
+}
+
 struct ImportCollector {
     imports: Vec<ImportInfo>,
     asset_urls: Vec<AssetUrlInfo>,
     workers: Vec<WorkerInfo>,
     glob_imports: Vec<GlobImportInfo>,
+    import_meta_env: Vec<ImportMetaEnvInfo>,
 }
 
 impl<'a> MatchEvent<'a> for &'a AssetUrlInfo {
@@ -141,6 +147,34 @@ impl<'a> MatchEvent<'a> for &'a GlobImportInfo {
     }
 }
 
+impl<'a> MatchEvent<'a> for &'a ImportMetaEnvInfo {
+    fn tag(&self) -> Atom {
+        atoms::import_meta_env()
+    }
+
+    fn arity(&self) -> usize {
+        3
+    }
+
+    fn positional_field(&self, index: usize) -> Option<ValueRef<'a>> {
+        match index {
+            1 => Some(ValueRef::U64(self.start.into())),
+            2 => Some(ValueRef::U64(self.r#end.into())),
+            _ => None,
+        }
+    }
+
+    fn field(&self, name: Atom) -> Option<ValueRef<'a>> {
+        if name == atoms::start() {
+            Some(ValueRef::U64(self.start.into()))
+        } else if name == atoms::r#end() {
+            Some(ValueRef::U64(self.r#end.into()))
+        } else {
+            None
+        }
+    }
+}
+
 impl<'a> MatchEvent<'a> for &'a ImportInfo {
     fn tag(&self) -> Atom {
         atoms::import_source()
@@ -179,6 +213,17 @@ impl<'a> MatchEvent<'a> for &'a ImportInfo {
 }
 
 impl<'a> Visit<'a> for ImportCollector {
+    fn visit_static_member_expression(&mut self, expr: &oxc_ast::ast::StaticMemberExpression<'a>) {
+        if is_import_meta_member(expr, "env") {
+            self.import_meta_env.push(ImportMetaEnvInfo {
+                start: expr.span.start,
+                r#end: expr.span.end,
+            });
+        }
+
+        walk::walk_static_member_expression(self, expr);
+    }
+
     fn visit_import_declaration(&mut self, decl: &oxc_ast::ast::ImportDeclaration<'a>) {
         if decl.import_kind != ImportOrExportKind::Type {
             self.imports.push(ImportInfo {
@@ -294,6 +339,7 @@ pub fn select<'a>(
         asset_urls: Vec::new(),
         workers: Vec::new(),
         glob_imports: Vec::new(),
+        import_meta_env: Vec::new(),
     };
     collector.visit_program(&ret.program);
 
@@ -313,6 +359,10 @@ pub fn select<'a>(
 
     for glob_import in &collector.glob_imports {
         selector.run_event(env, &glob_import, &mut out)?;
+    }
+
+    for import_meta_env in &collector.import_meta_env {
+        selector.run_event(env, &import_meta_env, &mut out)?;
     }
 
     Ok((atoms::ok(), out).encode(env))

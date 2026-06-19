@@ -242,6 +242,7 @@ defmodule OXC do
     * `:asset_urls` — `new URL(..., import.meta.url)` maps with `:specifier`, `:start`, and `:end`
     * `:workers` — `new Worker(...)` and `new SharedWorker(...)` maps with `:specifier`, `:kind`, `:start`, and `:end`
     * `:glob_imports` — `import.meta.glob(...)` maps with `:patterns`, `:start`, and `:end`
+    * `:import_meta_env` — `import.meta.env` maps with `:start` and `:end`
 
   ## Examples
 
@@ -295,6 +296,15 @@ defmodule OXC do
       {{:glob_import, :"$1", :"$2", :"$3"}, [],
        [
          %{patterns: :"$1", start: :"$2", end: :"$3"}
+       ]}
+    ]
+  end
+
+  defp selector_spec(:import_meta_env) do
+    [
+      {{:import_meta_env, :"$1", :"$2"}, [],
+       [
+         %{start: :"$1", end: :"$2"}
        ]}
     ]
   end

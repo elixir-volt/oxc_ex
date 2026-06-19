@@ -363,13 +363,14 @@ impl<'a> Visit<'a> for ImportCollector {
             }
             Expression::TemplateLiteral(template) if expr.options.is_none() => {
                 if let Some(pattern) = dynamic_import_pattern(template) {
-                    self.dynamic_import_templates.push(DynamicImportTemplateInfo {
-                        pattern,
-                        start: expr.span.start,
-                        r#end: expr.span.end,
-                        template_start: template.span.start,
-                        template_end: template.span.end,
-                    });
+                    self.dynamic_import_templates
+                        .push(DynamicImportTemplateInfo {
+                            pattern,
+                            start: expr.span.start,
+                            r#end: expr.span.end,
+                            template_start: template.span.start,
+                            template_end: template.span.end,
+                        });
                 }
             }
             _ => {}

@@ -277,10 +277,7 @@ defmodule OXC do
 
   defp selector_spec(:asset_urls) do
     [
-      {{:asset_url, :"$1", :"$2", :"$3"}, [],
-       [
-         %{specifier: :"$1", start: :"$2", end: :"$3"}
-       ]}
+      {{:asset_url, :"$1", :"$2", :"$3"}, [], [source_span_projection()]}
     ]
   end
 
@@ -322,15 +319,16 @@ defmodule OXC do
 
   defp selector_spec(:require_calls) do
     [
-      {{:require_call, :"$1", :"$2", :"$3"}, [],
-       [
-         %{specifier: :"$1", start: :"$2", end: :"$3"}
-       ]}
+      {{:require_call, :"$1", :"$2", :"$3"}, [], [source_span_projection()]}
     ]
   end
 
   defp selector_spec(selector) do
     raise ArgumentError, "unknown OXC selector #{inspect(selector)}"
+  end
+
+  defp source_span_projection do
+    %{specifier: :"$1", start: :"$2", end: :"$3"}
   end
 
   @doc """

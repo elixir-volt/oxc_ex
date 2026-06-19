@@ -9,7 +9,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 rustler = { version = "0.38", default-features = false, features = ["derive", "nif_version_2_15", "serde"] }
-rustler_match_spec = { path = "../../../rustler_match_spec/native/rustler_match_spec", default-features = false }
+rustler_match_spec = { version = "0.1", default-features = false }
 oxc_allocator = "0.130"
 oxc_ast = { version = "0.130", features = ["serialize"] }
 oxc_ast_visit = "0.130"

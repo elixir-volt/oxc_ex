@@ -2941,6 +2941,8 @@ dependencies = [
 [[package]]
 name = "rustler_match_spec"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d556fa3e9ba2280532881541d51ac4a14912c32494c3e7c0688f753f20760c5"
 dependencies = [
  "rustler",
 ]

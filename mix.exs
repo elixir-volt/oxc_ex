@@ -74,7 +74,7 @@ defmodule OXC.MixProject do
 
   defp deps do
     [
-      {:rustler, "~> 0.36 or ~> 0.37", optional: true},
+      {:rustler, "~> 0.36 or ~> 0.37 or ~> 0.38", optional: true},
       {:rustler_precompiled, "~> 0.8"},
       {:rustq, "~> 0.4", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
@@ -83,6 +83,7 @@ defmodule OXC.MixProject do
       {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.2", only: [:dev, :test], runtime: false},
       {:reach, "~> 2.5", only: [:dev, :test], runtime: false},
+      {:rustler_match_spec, path: "../rustler_match_spec", only: [:dev, :test], runtime: false},
       {:jason, "~> 1.4"}
     ]
   end

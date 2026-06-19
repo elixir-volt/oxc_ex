@@ -4,7 +4,8 @@ use oxc_ast_visit::walk;
 use oxc_ast_visit::Visit;
 use oxc_parser::Parser;
 use oxc_span::SourceType;
-use rustler::{Encoder, Env, NifMap, NifResult, Term};
+use rustler::{Atom, Encoder, Env, NifMap, NifResult, Term};
+use rustler_match_spec::{MatchEvent, Selector, ValueRef};
 
 use crate::atoms;
 use crate::error::{error_to_term, format_errors};
@@ -21,6 +22,43 @@ struct ImportInfo {
 
 struct ImportCollector {
     imports: Vec<ImportInfo>,
+}
+
+impl<'a> MatchEvent<'a> for &'a ImportInfo {
+    fn tag(&self) -> Atom {
+        atoms::import_source()
+    }
+
+    fn arity(&self) -> usize {
+        6
+    }
+
+    fn positional_field(&self, index: usize) -> Option<ValueRef<'a>> {
+        match index {
+            1 => Some(ValueRef::Str(self.specifier.as_str())),
+            2 => Some(ValueRef::Atom(self.r#type)),
+            3 => Some(ValueRef::Atom(self.kind)),
+            4 => Some(ValueRef::U64(self.start.into())),
+            5 => Some(ValueRef::U64(self.r#end.into())),
+            _ => None,
+        }
+    }
+
+    fn field(&self, name: Atom) -> Option<ValueRef<'a>> {
+        if name == atoms::specifier() {
+            Some(ValueRef::Str(self.specifier.as_str()))
+        } else if name == atoms::r#type() {
+            Some(ValueRef::Atom(self.r#type))
+        } else if name == atoms::kind() {
+            Some(ValueRef::Atom(self.kind))
+        } else if name == atoms::start() {
+            Some(ValueRef::U64(self.start.into()))
+        } else if name == atoms::r#end() {
+            Some(ValueRef::U64(self.r#end.into()))
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a> Visit<'a> for ImportCollector {
@@ -126,4 +164,36 @@ pub fn collect_imports<'a>(
     collector.visit_program(&ret.program);
 
     Ok((atoms::ok(), collector.imports).encode(env))
+}
+
+#[rustler::nif(schedule = "DirtyCpu")]
+pub fn select<'a>(
+    env: Env<'a>,
+    source_term: Term<'a>,
+    filename: &str,
+    spec: Term<'a>,
+) -> NifResult<Term<'a>> {
+    let selector = Selector::from_term(spec)?;
+    let source_binary = source_from_term(source_term)?;
+    let source = binary_to_str(&source_binary)?;
+    let allocator = Allocator::default();
+    let source_type = SourceType::from_path(filename).unwrap_or_default();
+    let ret = Parser::new(&allocator, source, source_type).parse();
+
+    if !ret.errors.is_empty() {
+        return error_to_term(env, &format_errors(&ret.errors));
+    }
+
+    let mut collector = ImportCollector {
+        imports: Vec::new(),
+    };
+    collector.visit_program(&ret.program);
+
+    let mut out = Vec::new();
+
+    for import in &collector.imports {
+        selector.run_event(env, &import, &mut out)?;
+    }
+
+    Ok((atoms::ok(), out).encode(env))
 }

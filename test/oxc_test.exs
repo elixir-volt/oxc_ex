@@ -502,6 +502,59 @@ defmodule OXCTest do
     end
   end
 
+  describe "select/3" do
+    test "selects import-source events with match specs" do
+      import RustlerMatchSpec
+
+      source = """
+      import { ref } from 'vue'
+      export { foo } from './foo'
+      const lazy = import('./lazy')
+      """
+
+      spec =
+        match_spec do
+          {:import_source, specifier, ref_type, kind, start, finish} ->
+            %{specifier: specifier, type: ref_type, kind: kind, start: start, end: finish}
+        end
+
+      assert {:ok, refs} = OXC.select(source, "test.js", spec)
+
+      assert [
+               %{specifier: "vue", type: :static, kind: :import},
+               %{specifier: "./foo", type: :static, kind: :export},
+               %{specifier: "./lazy", type: :dynamic, kind: :import}
+             ] = refs
+    end
+
+    test "selects only matching import-source events" do
+      import RustlerMatchSpec
+
+      source = "import { ref } from 'vue'\nconst lazy = import('./lazy')"
+
+      spec =
+        match_spec do
+          {:import_source, specifier, :dynamic, :import, _start, _finish} ->
+            specifier
+        end
+
+      assert OXC.select(source, "test.js", spec) == {:ok, ["./lazy"]}
+    end
+
+    test "returns errors for invalid syntax" do
+      import RustlerMatchSpec
+
+      spec =
+        match_spec do
+          {:import_source, specifier, _type, _kind, _start, _finish} -> specifier
+        end
+
+      assert {:error, errors} = OXC.select("const = ;", "bad.js", spec)
+      assert is_list(errors)
+      assert %{message: _} = hd(errors)
+    end
+  end
+
   describe "rewrite_specifiers/3" do
     test "rewrites matching specifiers" do
       source = "import { ref } from 'vue'\nimport a from './utils'"

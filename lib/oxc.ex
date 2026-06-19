@@ -308,6 +308,35 @@ defmodule OXC do
     end
   end
 
+  @doc """
+  Select compact parser events with a match-spec-shaped selector.
+
+  The initial event stream contains import-like source references with the tuple
+  shape:
+
+      {:import_source, specifier, type, kind, start, end}
+
+  where `type` is `:static` or `:dynamic`, and `kind` is `:import`, `:export`,
+  or `:export_all`.
+
+  ## Examples
+
+      iex> import RustlerMatchSpec
+      iex> spec = match_spec do
+      ...>   {:import_source, specifier, :static, kind, _start, _end} -> {kind, specifier}
+      ...> end
+      iex> {:ok, refs} = OXC.select("import { ref } from 'vue'", "test.js", spec)
+      iex> refs
+      [import: "vue"]
+  """
+  @spec select(source(), String.t(), list()) :: {:ok, list()} | {:error, [error()]}
+  def select(source, filename, spec) when is_list(spec) do
+    case OXC.Native.select(source, filename, spec) do
+      {:ok, results} -> {:ok, results}
+      {:error, errors} -> {:error, atomize_term_keys(errors)}
+    end
+  end
+
   @doc "Like `collect_imports/2` but raises on errors."
   @spec collect_imports!(source(), String.t()) :: [map()]
   def collect_imports!(source, filename) do

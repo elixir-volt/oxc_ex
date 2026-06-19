@@ -1,5 +1,5 @@
 use oxc_allocator::Allocator;
-use oxc_ast::ast::{Expression, ImportOrExportKind};
+use oxc_ast::ast::{Argument, Expression, ImportOrExportKind};
 use oxc_ast_visit::walk;
 use oxc_ast_visit::Visit;
 use oxc_parser::Parser;
@@ -19,8 +19,46 @@ struct ImportInfo {
     r#end: u32,
 }
 
+struct AssetUrlInfo {
+    specifier: String,
+    start: u32,
+    r#end: u32,
+}
+
 struct ImportCollector {
     imports: Vec<ImportInfo>,
+    asset_urls: Vec<AssetUrlInfo>,
+}
+
+impl<'a> MatchEvent<'a> for &'a AssetUrlInfo {
+    fn tag(&self) -> Atom {
+        atoms::asset_url()
+    }
+
+    fn arity(&self) -> usize {
+        4
+    }
+
+    fn positional_field(&self, index: usize) -> Option<ValueRef<'a>> {
+        match index {
+            1 => Some(ValueRef::Str(self.specifier.as_str())),
+            2 => Some(ValueRef::U64(self.start.into())),
+            3 => Some(ValueRef::U64(self.r#end.into())),
+            _ => None,
+        }
+    }
+
+    fn field(&self, name: Atom) -> Option<ValueRef<'a>> {
+        if name == atoms::specifier() {
+            Some(ValueRef::Str(self.specifier.as_str()))
+        } else if name == atoms::start() {
+            Some(ValueRef::U64(self.start.into()))
+        } else if name == atoms::r#end() {
+            Some(ValueRef::U64(self.r#end.into()))
+        } else {
+            None
+        }
+    }
 }
 
 impl<'a> MatchEvent<'a> for &'a ImportInfo {
@@ -100,6 +138,24 @@ impl<'a> Visit<'a> for ImportCollector {
         }
     }
 
+    fn visit_new_expression(&mut self, expr: &oxc_ast::ast::NewExpression<'a>) {
+        if is_url_constructor(&expr.callee) && expr.arguments.len() >= 2 {
+            if let (Some(source), Some(base)) = (expr.arguments.first(), expr.arguments.get(1)) {
+                if let (Argument::StringLiteral(lit), true) =
+                    (source, is_import_meta_url_argument(base))
+                {
+                    self.asset_urls.push(AssetUrlInfo {
+                        specifier: lit.value.to_string(),
+                        start: lit.span.start,
+                        r#end: lit.span.end,
+                    });
+                }
+            }
+        }
+
+        walk::walk_new_expression(self, expr);
+    }
+
     fn visit_import_expression(&mut self, expr: &oxc_ast::ast::ImportExpression<'a>) {
         if let Expression::StringLiteral(lit) = &expr.source {
             self.imports.push(ImportInfo {
@@ -134,6 +190,7 @@ pub fn select<'a>(
 
     let mut collector = ImportCollector {
         imports: Vec::new(),
+        asset_urls: Vec::new(),
     };
     collector.visit_program(&ret.program);
 
@@ -143,5 +200,25 @@ pub fn select<'a>(
         selector.run_event(env, &import, &mut out)?;
     }
 
+    for asset_url in &collector.asset_urls {
+        selector.run_event(env, &asset_url, &mut out)?;
+    }
+
     Ok((atoms::ok(), out).encode(env))
+}
+
+fn is_url_constructor(expr: &Expression<'_>) -> bool {
+    matches!(expr, Expression::Identifier(identifier) if identifier.name == "URL")
+}
+
+fn is_import_meta_url_argument(argument: &Argument<'_>) -> bool {
+    matches!(argument, Argument::StaticMemberExpression(member) if is_import_meta_url(member))
+}
+
+fn is_import_meta_url(member: &oxc_ast::ast::StaticMemberExpression<'_>) -> bool {
+    member.property.name == "url"
+        && matches!(
+            &member.object,
+            Expression::MetaProperty(meta) if meta.meta.name == "import" && meta.property.name == "meta"
+        )
 }

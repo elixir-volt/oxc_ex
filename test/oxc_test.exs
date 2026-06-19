@@ -413,6 +413,21 @@ defmodule OXCTest do
       assert OXC.select(source, "test.js", :import_specifiers) == {:ok, ["vue", "./lazy"]}
     end
 
+    test "selects asset URL maps by selector name" do
+      source = ~s|const font = new URL("./font.woff2", import.meta.url).href|
+
+      assert {:ok, [%{specifier: "./font.woff2", start: start, end: finish}]} =
+               OXC.select(source, "test.js", :asset_urls)
+
+      assert binary_part(source, start, finish - start) == ~s|"./font.woff2"|
+    end
+
+    test "asset URLs ignore non import.meta.url bases" do
+      source = ~s|const font = new URL("./font.woff2", other.url).href|
+
+      assert OXC.select(source, "test.js", :asset_urls) == {:ok, []}
+    end
+
     test "returns errors for invalid syntax" do
       assert {:error, errors} = OXC.select("const = ;", "bad.js", :import_specifiers)
       assert is_list(errors)

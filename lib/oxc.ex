@@ -237,8 +237,9 @@ defmodule OXC do
 
   Available selectors:
 
-    * `:import_sources` — maps with `:specifier`, `:type`, `:kind`, `:start`, and `:end`
-    * `:import_specifiers` — specifier strings only
+    * `:import_sources` — import/export source maps with `:specifier`, `:type`, `:kind`, `:start`, and `:end`
+    * `:import_specifiers` — import/export source strings only
+    * `:asset_urls` — `new URL(..., import.meta.url)` maps with `:specifier`, `:start`, and `:end`
 
   ## Examples
 
@@ -266,6 +267,15 @@ defmodule OXC do
   defp selector_spec(:import_specifiers) do
     [
       {{:import_source, :"$1", :"$2", :"$3", :"$4", :"$5"}, [], [:"$1"]}
+    ]
+  end
+
+  defp selector_spec(:asset_urls) do
+    [
+      {{:asset_url, :"$1", :"$2", :"$3"}, [],
+       [
+         %{specifier: :"$1", start: :"$2", end: :"$3"}
+       ]}
     ]
   end
 

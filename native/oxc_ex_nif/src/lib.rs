@@ -58,6 +58,7 @@ mod atoms {
         path,
         code,
         asset,
+        asset_url,
         chunk,
         dynamic_imports,
     }

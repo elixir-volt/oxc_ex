@@ -263,7 +263,8 @@ source = "import { ref } from 'vue'\nexport { foo } from './foo'\nimport('./lazy
 {:ok, refs} = OXC.select(source, "test.js", :import_sources)
 ```
 
-Use `:import_specifiers` when only source strings are needed.
+Use `:import_specifiers` when only source strings are needed, and `:asset_urls`
+for `new URL(..., import.meta.url)` references.
 
 ### Rewrite Specifiers
 

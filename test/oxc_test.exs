@@ -452,6 +452,33 @@ defmodule OXCTest do
       assert OXC.select(source, "test.js", :workers) == {:ok, []}
     end
 
+    test "selects glob import calls by selector name" do
+      source = ~s|const modules = import.meta.glob("./pages/**/*.js")|
+
+      assert {:ok, [%{patterns: ["./pages/**/*.js"], start: start, end: finish}]} =
+               OXC.select(source, "test.js", :glob_imports)
+
+      assert binary_part(source, start, finish - start) ==
+               ~s|import.meta.glob("./pages/**/*.js")|
+    end
+
+    test "selects glob import array patterns by selector name" do
+      source = ~s|const modules = import.meta.glob(["./pages/**/*.js", "!./pages/**/test.js"])|
+
+      assert {:ok,
+              [%{patterns: ["./pages/**/*.js", "!./pages/**/test.js"], start: start, end: finish}]} =
+               OXC.select(source, "test.js", :glob_imports)
+
+      assert binary_part(source, start, finish - start) ==
+               ~s|import.meta.glob(["./pages/**/*.js", "!./pages/**/test.js"])|
+    end
+
+    test "glob imports ignore dynamic patterns" do
+      source = ~s|const modules = import.meta.glob(pattern)|
+
+      assert OXC.select(source, "test.js", :glob_imports) == {:ok, []}
+    end
+
     test "returns errors for invalid syntax" do
       assert {:error, errors} = OXC.select("const = ;", "bad.js", :import_specifiers)
       assert is_list(errors)

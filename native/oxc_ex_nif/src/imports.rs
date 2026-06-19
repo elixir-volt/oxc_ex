@@ -1,5 +1,5 @@
 use oxc_allocator::Allocator;
-use oxc_ast::ast::{Argument, Expression, ImportOrExportKind};
+use oxc_ast::ast::{Argument, ArrayExpressionElement, Expression, ImportOrExportKind};
 use oxc_ast_visit::walk;
 use oxc_ast_visit::Visit;
 use oxc_parser::Parser;
@@ -32,10 +32,17 @@ struct WorkerInfo {
     r#end: u32,
 }
 
+struct GlobImportInfo {
+    patterns: Vec<String>,
+    start: u32,
+    r#end: u32,
+}
+
 struct ImportCollector {
     imports: Vec<ImportInfo>,
     asset_urls: Vec<AssetUrlInfo>,
     workers: Vec<WorkerInfo>,
+    glob_imports: Vec<GlobImportInfo>,
 }
 
 impl<'a> MatchEvent<'a> for &'a AssetUrlInfo {
@@ -93,6 +100,37 @@ impl<'a> MatchEvent<'a> for &'a WorkerInfo {
             Some(ValueRef::Str(self.specifier.as_str()))
         } else if name == atoms::kind() {
             Some(ValueRef::Atom(self.kind))
+        } else if name == atoms::start() {
+            Some(ValueRef::U64(self.start.into()))
+        } else if name == atoms::r#end() {
+            Some(ValueRef::U64(self.r#end.into()))
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> MatchEvent<'a> for &'a GlobImportInfo {
+    fn tag(&self) -> Atom {
+        atoms::glob_import()
+    }
+
+    fn arity(&self) -> usize {
+        4
+    }
+
+    fn positional_field(&self, index: usize) -> Option<ValueRef<'a>> {
+        match index {
+            1 => Some(ValueRef::StringList(self.patterns.as_slice())),
+            2 => Some(ValueRef::U64(self.start.into())),
+            3 => Some(ValueRef::U64(self.r#end.into())),
+            _ => None,
+        }
+    }
+
+    fn field(&self, name: Atom) -> Option<ValueRef<'a>> {
+        if name == atoms::patterns() {
+            Some(ValueRef::StringList(self.patterns.as_slice()))
         } else if name == atoms::start() {
             Some(ValueRef::U64(self.start.into()))
         } else if name == atoms::r#end() {
@@ -180,6 +218,20 @@ impl<'a> Visit<'a> for ImportCollector {
         }
     }
 
+    fn visit_call_expression(&mut self, expr: &oxc_ast::ast::CallExpression<'a>) {
+        if is_import_meta_glob_call(&expr.callee) {
+            if let Some(patterns) = expr.arguments.first().and_then(glob_patterns_from_argument) {
+                self.glob_imports.push(GlobImportInfo {
+                    patterns,
+                    start: expr.span.start,
+                    r#end: expr.span.end,
+                });
+            }
+        }
+
+        walk::walk_call_expression(self, expr);
+    }
+
     fn visit_new_expression(&mut self, expr: &oxc_ast::ast::NewExpression<'a>) {
         if let Some(lit) = url_literal_from_new_url_expression(expr) {
             self.asset_urls.push(AssetUrlInfo {
@@ -241,6 +293,7 @@ pub fn select<'a>(
         imports: Vec::new(),
         asset_urls: Vec::new(),
         workers: Vec::new(),
+        glob_imports: Vec::new(),
     };
     collector.visit_program(&ret.program);
 
@@ -258,7 +311,30 @@ pub fn select<'a>(
         selector.run_event(env, &worker, &mut out)?;
     }
 
+    for glob_import in &collector.glob_imports {
+        selector.run_event(env, &glob_import, &mut out)?;
+    }
+
     Ok((atoms::ok(), out).encode(env))
+}
+
+fn is_import_meta_glob_call(expr: &Expression<'_>) -> bool {
+    matches!(expr, Expression::StaticMemberExpression(member) if is_import_meta_member(member, "glob"))
+}
+
+fn glob_patterns_from_argument(argument: &Argument<'_>) -> Option<Vec<String>> {
+    match argument {
+        Argument::StringLiteral(lit) => Some(vec![lit.value.to_string()]),
+        Argument::ArrayExpression(array) => array
+            .elements
+            .iter()
+            .map(|element| match element {
+                ArrayExpressionElement::StringLiteral(lit) => Some(lit.value.to_string()),
+                _ => None,
+            })
+            .collect(),
+        _ => None,
+    }
 }
 
 fn url_literal_from_new_url_expression<'a>(
@@ -295,7 +371,14 @@ fn is_import_meta_url_argument(argument: &Argument<'_>) -> bool {
 }
 
 fn is_import_meta_url(member: &oxc_ast::ast::StaticMemberExpression<'_>) -> bool {
-    member.property.name == "url"
+    is_import_meta_member(member, "url")
+}
+
+fn is_import_meta_member(
+    member: &oxc_ast::ast::StaticMemberExpression<'_>,
+    property: &str,
+) -> bool {
+    member.property.name == property
         && matches!(
             &member.object,
             Expression::MetaProperty(meta) if meta.meta.name == "import" && meta.property.name == "meta"

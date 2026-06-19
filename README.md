@@ -264,8 +264,9 @@ source = "import { ref } from 'vue'\nexport { foo } from './foo'\nimport('./lazy
 ```
 
 Use `:import_specifiers` when only source strings are needed, `:asset_urls`
-for `new URL(..., import.meta.url)` references, and `:workers` for worker
-constructors using `new URL(..., import.meta.url)`.
+for `new URL(..., import.meta.url)` references, `:workers` for worker
+constructors using `new URL(..., import.meta.url)`, and `:glob_imports` for
+`import.meta.glob(...)` calls.
 
 ### Rewrite Specifiers
 

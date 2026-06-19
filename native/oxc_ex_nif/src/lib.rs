@@ -56,11 +56,13 @@ mod atoms {
         r#type = "type",
         file_name,
         path,
+        patterns,
         code,
         asset,
         asset_url,
         worker,
         shared_worker,
+        glob_import,
         chunk,
         dynamic_imports,
     }

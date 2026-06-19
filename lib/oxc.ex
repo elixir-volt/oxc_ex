@@ -240,6 +240,7 @@ defmodule OXC do
     * `:import_sources` — import/export source maps with `:specifier`, `:type`, `:kind`, `:start`, and `:end`
     * `:import_specifiers` — import/export source strings only
     * `:asset_urls` — `new URL(..., import.meta.url)` maps with `:specifier`, `:start`, and `:end`
+    * `:workers` — `new Worker(...)` and `new SharedWorker(...)` maps with `:specifier`, `:kind`, `:start`, and `:end`
 
   ## Examples
 
@@ -275,6 +276,15 @@ defmodule OXC do
       {{:asset_url, :"$1", :"$2", :"$3"}, [],
        [
          %{specifier: :"$1", start: :"$2", end: :"$3"}
+       ]}
+    ]
+  end
+
+  defp selector_spec(:workers) do
+    [
+      {{:worker, :"$1", :"$2", :"$3", :"$4"}, [],
+       [
+         %{specifier: :"$1", kind: :"$2", start: :"$3", end: :"$4"}
        ]}
     ]
   end

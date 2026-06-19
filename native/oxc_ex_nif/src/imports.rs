@@ -25,9 +25,17 @@ struct AssetUrlInfo {
     r#end: u32,
 }
 
+struct WorkerInfo {
+    specifier: String,
+    kind: rustler::Atom,
+    start: u32,
+    r#end: u32,
+}
+
 struct ImportCollector {
     imports: Vec<ImportInfo>,
     asset_urls: Vec<AssetUrlInfo>,
+    workers: Vec<WorkerInfo>,
 }
 
 impl<'a> MatchEvent<'a> for &'a AssetUrlInfo {
@@ -51,6 +59,40 @@ impl<'a> MatchEvent<'a> for &'a AssetUrlInfo {
     fn field(&self, name: Atom) -> Option<ValueRef<'a>> {
         if name == atoms::specifier() {
             Some(ValueRef::Str(self.specifier.as_str()))
+        } else if name == atoms::start() {
+            Some(ValueRef::U64(self.start.into()))
+        } else if name == atoms::r#end() {
+            Some(ValueRef::U64(self.r#end.into()))
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a> MatchEvent<'a> for &'a WorkerInfo {
+    fn tag(&self) -> Atom {
+        atoms::worker()
+    }
+
+    fn arity(&self) -> usize {
+        5
+    }
+
+    fn positional_field(&self, index: usize) -> Option<ValueRef<'a>> {
+        match index {
+            1 => Some(ValueRef::Str(self.specifier.as_str())),
+            2 => Some(ValueRef::Atom(self.kind)),
+            3 => Some(ValueRef::U64(self.start.into())),
+            4 => Some(ValueRef::U64(self.r#end.into())),
+            _ => None,
+        }
+    }
+
+    fn field(&self, name: Atom) -> Option<ValueRef<'a>> {
+        if name == atoms::specifier() {
+            Some(ValueRef::Str(self.specifier.as_str()))
+        } else if name == atoms::kind() {
+            Some(ValueRef::Atom(self.kind))
         } else if name == atoms::start() {
             Some(ValueRef::U64(self.start.into()))
         } else if name == atoms::r#end() {
@@ -139,13 +181,20 @@ impl<'a> Visit<'a> for ImportCollector {
     }
 
     fn visit_new_expression(&mut self, expr: &oxc_ast::ast::NewExpression<'a>) {
-        if is_url_constructor(&expr.callee) && expr.arguments.len() >= 2 {
-            if let (Some(source), Some(base)) = (expr.arguments.first(), expr.arguments.get(1)) {
-                if let (Argument::StringLiteral(lit), true) =
-                    (source, is_import_meta_url_argument(base))
-                {
-                    self.asset_urls.push(AssetUrlInfo {
+        if let Some(lit) = url_literal_from_new_url_expression(expr) {
+            self.asset_urls.push(AssetUrlInfo {
+                specifier: lit.value.to_string(),
+                start: lit.span.start,
+                r#end: lit.span.end,
+            });
+        }
+
+        if let Some(kind) = worker_constructor_kind(&expr.callee) {
+            if let Some(Argument::NewExpression(url)) = expr.arguments.first() {
+                if let Some(lit) = url_literal_from_new_url_expression(url) {
+                    self.workers.push(WorkerInfo {
                         specifier: lit.value.to_string(),
+                        kind,
                         start: lit.span.start,
                         r#end: lit.span.end,
                     });
@@ -191,6 +240,7 @@ pub fn select<'a>(
     let mut collector = ImportCollector {
         imports: Vec::new(),
         asset_urls: Vec::new(),
+        workers: Vec::new(),
     };
     collector.visit_program(&ret.program);
 
@@ -204,7 +254,36 @@ pub fn select<'a>(
         selector.run_event(env, &asset_url, &mut out)?;
     }
 
+    for worker in &collector.workers {
+        selector.run_event(env, &worker, &mut out)?;
+    }
+
     Ok((atoms::ok(), out).encode(env))
+}
+
+fn url_literal_from_new_url_expression<'a>(
+    expr: &'a oxc_ast::ast::NewExpression<'a>,
+) -> Option<&'a oxc_ast::ast::StringLiteral<'a>> {
+    if !(is_url_constructor(&expr.callee) && expr.arguments.len() >= 2) {
+        return None;
+    }
+
+    match (expr.arguments.first(), expr.arguments.get(1)) {
+        (Some(Argument::StringLiteral(lit)), Some(base)) if is_import_meta_url_argument(base) => {
+            Some(lit)
+        }
+        _ => None,
+    }
+}
+
+fn worker_constructor_kind(expr: &Expression<'_>) -> Option<Atom> {
+    match expr {
+        Expression::Identifier(identifier) if identifier.name == "Worker" => Some(atoms::worker()),
+        Expression::Identifier(identifier) if identifier.name == "SharedWorker" => {
+            Some(atoms::shared_worker())
+        }
+        _ => None,
+    }
 }
 
 fn is_url_constructor(expr: &Expression<'_>) -> bool {

@@ -59,6 +59,8 @@ mod atoms {
         code,
         asset,
         asset_url,
+        worker,
+        shared_worker,
         chunk,
         dynamic_imports,
     }

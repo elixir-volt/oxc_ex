@@ -428,6 +428,30 @@ defmodule OXCTest do
       assert OXC.select(source, "test.js", :asset_urls) == {:ok, []}
     end
 
+    test "selects worker URL maps by selector name" do
+      source = ~s|new Worker(new URL("./worker.js", import.meta.url), { type: "module" })|
+
+      assert {:ok, [%{specifier: "./worker.js", kind: :worker, start: start, end: finish}]} =
+               OXC.select(source, "test.js", :workers)
+
+      assert binary_part(source, start, finish - start) == ~s|"./worker.js"|
+    end
+
+    test "selects shared worker URL maps by selector name" do
+      source = ~s|new SharedWorker(new URL("./shared.js", import.meta.url))|
+
+      assert {:ok, [%{specifier: "./shared.js", kind: :shared_worker, start: start, end: finish}]} =
+               OXC.select(source, "test.js", :workers)
+
+      assert binary_part(source, start, finish - start) == ~s|"./shared.js"|
+    end
+
+    test "workers ignore direct string constructors" do
+      source = ~s|new Worker("./worker.js")|
+
+      assert OXC.select(source, "test.js", :workers) == {:ok, []}
+    end
+
     test "returns errors for invalid syntax" do
       assert {:error, errors} = OXC.select("const = ;", "bad.js", :import_specifiers)
       assert is_list(errors)

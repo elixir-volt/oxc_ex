@@ -53,6 +53,12 @@ struct DynamicImportTemplateInfo {
     template_end: u32,
 }
 
+struct RequireCallInfo {
+    specifier: String,
+    start: u32,
+    r#end: u32,
+}
+
 struct ImportCollector {
     imports: Vec<ImportInfo>,
     asset_urls: Vec<AssetUrlInfo>,
@@ -60,6 +66,7 @@ struct ImportCollector {
     glob_imports: Vec<GlobImportInfo>,
     import_meta_env: Vec<ImportMetaEnvInfo>,
     dynamic_import_templates: Vec<DynamicImportTemplateInfo>,
+    require_calls: Vec<RequireCallInfo>,
 }
 
 impl<'a> MatchEvent<'a> for &'a AssetUrlInfo {
@@ -223,6 +230,37 @@ impl<'a> MatchEvent<'a> for &'a DynamicImportTemplateInfo {
     }
 }
 
+impl<'a> MatchEvent<'a> for &'a RequireCallInfo {
+    fn tag(&self) -> Atom {
+        atoms::require_call()
+    }
+
+    fn arity(&self) -> usize {
+        4
+    }
+
+    fn positional_field(&self, index: usize) -> Option<ValueRef<'a>> {
+        match index {
+            1 => Some(ValueRef::Str(self.specifier.as_str())),
+            2 => Some(ValueRef::U64(self.start.into())),
+            3 => Some(ValueRef::U64(self.r#end.into())),
+            _ => None,
+        }
+    }
+
+    fn field(&self, name: Atom) -> Option<ValueRef<'a>> {
+        if name == atoms::specifier() {
+            Some(ValueRef::Str(self.specifier.as_str()))
+        } else if name == atoms::start() {
+            Some(ValueRef::U64(self.start.into()))
+        } else if name == atoms::r#end() {
+            Some(ValueRef::U64(self.r#end.into()))
+        } else {
+            None
+        }
+    }
+}
+
 impl<'a> MatchEvent<'a> for &'a ImportInfo {
     fn tag(&self) -> Atom {
         atoms::import_source()
@@ -322,6 +360,16 @@ impl<'a> Visit<'a> for ImportCollector {
             }
         }
 
+        if is_require_call(&expr.callee) {
+            if let Some(Argument::StringLiteral(lit)) = expr.arguments.first() {
+                self.require_calls.push(RequireCallInfo {
+                    specifier: lit.value.to_string(),
+                    start: lit.span.start,
+                    r#end: lit.span.end,
+                });
+            }
+        }
+
         walk::walk_call_expression(self, expr);
     }
 
@@ -404,6 +452,7 @@ pub fn select<'a>(
         glob_imports: Vec::new(),
         import_meta_env: Vec::new(),
         dynamic_import_templates: Vec::new(),
+        require_calls: Vec::new(),
     };
     collector.visit_program(&ret.program);
 
@@ -433,6 +482,10 @@ pub fn select<'a>(
         selector.run_event(env, &dynamic_import_template, &mut out)?;
     }
 
+    for require_call in &collector.require_calls {
+        selector.run_event(env, &require_call, &mut out)?;
+    }
+
     Ok((atoms::ok(), out).encode(env))
 }
 
@@ -459,6 +512,10 @@ fn dynamic_import_pattern(template: &TemplateLiteral<'_>) -> Option<String> {
 
 fn is_import_meta_glob_call(expr: &Expression<'_>) -> bool {
     matches!(expr, Expression::StaticMemberExpression(member) if is_import_meta_member(member, "glob"))
+}
+
+fn is_require_call(expr: &Expression<'_>) -> bool {
+    matches!(expr, Expression::Identifier(identifier) if identifier.name == "require")
 }
 
 fn glob_patterns_from_argument(argument: &Argument<'_>) -> Option<Vec<String>> {

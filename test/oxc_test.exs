@@ -530,6 +530,21 @@ defmodule OXCTest do
       assert OXC.select(source, "test.js", :dynamic_import_templates) == {:ok, []}
     end
 
+    test "selects CommonJS require call maps by selector name" do
+      source = ~s|const mod = require("./mod.cjs"); require(dynamic)|
+
+      assert {:ok, [%{specifier: "./mod.cjs", start: start, end: finish}]} =
+               OXC.select(source, "test.js", :require_calls)
+
+      assert binary_part(source, start, finish - start) == ~s|"./mod.cjs"|
+    end
+
+    test "require call selector ignores member calls and non-string arguments" do
+      source = ~s|loader.require("./skip.js"); require(name)|
+
+      assert OXC.select(source, "test.js", :require_calls) == {:ok, []}
+    end
+
     test "returns errors for invalid syntax" do
       assert {:error, errors} = OXC.select("const = ;", "bad.js", :import_specifiers)
       assert is_list(errors)

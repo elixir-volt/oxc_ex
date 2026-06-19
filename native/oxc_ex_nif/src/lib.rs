@@ -65,6 +65,7 @@ mod atoms {
         glob_import,
         import_meta_env,
         dynamic_import_template,
+        require_call,
         template_start,
         template_end,
         pattern,

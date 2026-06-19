@@ -244,6 +244,7 @@ defmodule OXC do
     * `:glob_imports` — `import.meta.glob(...)` maps with `:patterns`, `:start`, and `:end`
     * `:import_meta_env` — `import.meta.env` maps with `:start` and `:end`
     * `:dynamic_import_templates` — template-literal `import(...)` maps with `:pattern`, `:start`, `:end`, `:template_start`, and `:template_end`
+    * `:require_calls` — CommonJS `require(...)` maps with `:specifier`, `:start`, and `:end`
 
   ## Examples
 
@@ -315,6 +316,15 @@ defmodule OXC do
       {{:dynamic_import_template, :"$1", :"$2", :"$3", :"$4", :"$5"}, [],
        [
          %{pattern: :"$1", start: :"$2", end: :"$3", template_start: :"$4", template_end: :"$5"}
+       ]}
+    ]
+  end
+
+  defp selector_spec(:require_calls) do
+    [
+      {{:require_call, :"$1", :"$2", :"$3"}, [],
+       [
+         %{specifier: :"$1", start: :"$2", end: :"$3"}
        ]}
     ]
   end

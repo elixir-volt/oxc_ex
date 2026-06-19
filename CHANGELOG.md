@@ -2,11 +2,12 @@
 
 ## Unreleased
 
-## 0.17.1 - 2026-06-19
+## 0.17.2 - 2026-06-19
 
 ### Added
 
 - Add `:dynamic_import_templates` selector for template-literal dynamic `import(...)` expressions.
+- Add `:require_calls` selector for CommonJS `require("...")` calls.
 
 ## 0.17.0 - 2026-06-19
 

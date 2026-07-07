@@ -406,7 +406,15 @@ alias OXC.Bundle
 
 Enum.map(result.outputs, & &1.file_name)
 #=> ["app.js", "admin.js", "chunks/shared-....js"]
+
+shared = Enum.find(result.outputs, &(&1.type == :chunk))
+shared.module_ids
+#=> ["shared.js"]
 ```
+
+Each `%OXC.Bundle.Output{}` includes `:imports`, `:dynamic_imports`,
+`:exports`, and `:module_ids` for chunks, matching Rolldown's rendered chunk
+metadata.
 
 ### Bang Variants
 

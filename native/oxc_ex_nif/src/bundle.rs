@@ -48,6 +48,7 @@ struct BundleRunOutput {
     imports: Vec<String>,
     dynamic_imports: Vec<String>,
     exports: Vec<String>,
+    module_ids: Vec<String>,
 }
 
 fn normalize_virtual_path(path: &str) -> Result<PathBuf, String> {
@@ -564,6 +565,16 @@ fn run_rolldown_outputs(
     })
 }
 
+fn relative_module_id(module_id: &str, cwd: &Path) -> String {
+    let path = Path::new(module_id);
+
+    if let Ok(relative) = path.strip_prefix(cwd) {
+        relative.to_string_lossy().replace('\\', "/")
+    } else {
+        module_id.replace('\\', "/")
+    }
+}
+
 fn output_to_term_data(
     cwd: &Path,
     opts: &BundleOptions<'_>,
@@ -611,6 +622,11 @@ fn output_to_term_data(
                     .map(ToString::to_string)
                     .collect(),
                 exports: chunk.exports.iter().map(ToString::to_string).collect(),
+                module_ids: chunk
+                    .module_ids
+                    .iter()
+                    .map(|module_id| relative_module_id(module_id, cwd))
+                    .collect(),
             })
         }
         Output::Asset(asset) => Ok(BundleRunOutput {
@@ -627,6 +643,7 @@ fn output_to_term_data(
             imports: Vec::new(),
             dynamic_imports: Vec::new(),
             exports: Vec::new(),
+            module_ids: Vec::new(),
         }),
     }
 }

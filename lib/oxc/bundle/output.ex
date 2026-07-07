@@ -10,7 +10,8 @@ defmodule OXC.Bundle.Output do
             sourcemap: nil,
             imports: [],
             dynamic_imports: [],
-            exports: []
+            exports: [],
+            module_ids: []
 
   @type t :: %__MODULE__{}
 
@@ -27,7 +28,8 @@ defmodule OXC.Bundle.Output do
       sourcemap: Map.get(map, :sourcemap),
       imports: Map.get(map, :imports, []),
       dynamic_imports: Map.get(map, :dynamic_imports, []),
-      exports: Map.get(map, :exports, [])
+      exports: Map.get(map, :exports, []),
+      module_ids: Map.get(map, :module_ids, [])
     }
   end
 end

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.17.2 - 2026-07-07
+
+### Added
+
+- `OXC.Bundle.Output` now exposes Rolldown `module_ids` for generated chunks, enabling downstream tools to map emitted chunks back to source modules.
+
 ## 0.17.1 - 2026-06-19
 
 ### Added

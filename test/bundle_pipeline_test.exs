@@ -28,7 +28,10 @@ defmodule OXC.BundlePipelineTest do
     assert length(entry_outputs) == 2
     assert Enum.any?(entry_outputs, &(&1.file_name == "one.js"))
     assert Enum.any?(entry_outputs, &(&1.file_name == "two.js"))
-    assert Enum.any?(result.outputs, &(&1.type == :chunk))
+
+    shared_chunk = Enum.find(result.outputs, &(&1.type == :chunk))
+    assert shared_chunk
+    assert "shared.js" in shared_chunk.module_ids
   end
 
   test "writes outputs when outdir is configured" do

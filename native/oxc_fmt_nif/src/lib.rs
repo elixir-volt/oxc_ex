@@ -11,74 +11,19 @@ use oxc_parser::Parser;
 use oxc_span::SourceType;
 use rustler::{Binary, Encoder, Env, Error, NifResult, Term};
 
-mod atoms {
-    rustler::atoms! {
-        ok,
-        error,
-        print_width,
-        tab_width,
-        use_tabs,
-        semi,
-        single_quote,
-        jsx_single_quote,
-        trailing_comma,
-        bracket_spacing,
-        bracket_same_line,
-        arrow_parens,
-        end_of_line,
-        quote_props,
-        single_attribute_per_line,
-        object_wrap,
-        experimental_operator_position,
-        experimental_ternaries,
-        embedded_language_formatting,
-        sort_imports,
-        sort_tailwindcss,
-        // sort_imports sub-keys
-        ignore_case,
-        sort_side_effects,
-        order,
-        newlines_between,
-        partition_by_newline,
-        partition_by_comment,
-        internal_pattern,
-        // sort_tailwindcss sub-keys
-        config,
-        stylesheet,
-        functions,
-        attributes,
-        preserve_whitespace,
-        preserve_duplicates,
-    }
+include!("generated_atoms.rs");
+include!("generated_option_helpers.rs");
+
+fn get_int(term: Term<'_>, key: rustler::Atom) -> Option<i64> {
+    get_i64(term, key)
 }
 
-fn get_bool<'a>(term: Term<'a>, key: rustler::Atom) -> Option<bool> {
-    term.map_get(key).ok()?.decode::<bool>().ok()
+fn get_str(term: Term<'_>, key: rustler::Atom) -> Option<String> {
+    get_string(term, key)
 }
 
-fn get_int<'a>(term: Term<'a>, key: rustler::Atom) -> Option<i64> {
-    term.map_get(key).ok()?.decode::<i64>().ok()
-}
-
-fn get_str<'a>(term: Term<'a>, key: rustler::Atom) -> Option<String> {
-    let t = term.map_get(key).ok()?;
-    t.decode::<String>()
-        .ok()
-        .or_else(|| t.atom_to_string().ok())
-}
-
-fn get_str_list<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Vec<String>> {
-    let t = term.map_get(key).ok()?;
-    t.decode::<Vec<String>>().ok()
-}
-
-fn get_map<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>> {
-    let t = term.map_get(key).ok()?;
-    if t.is_map() {
-        Some(t)
-    } else {
-        None
-    }
+fn get_str_list(term: Term<'_>, key: rustler::Atom) -> Option<Vec<String>> {
+    get_string_list(term, key)
 }
 
 fn decode_format_options(opts: Term) -> FormatOptions {

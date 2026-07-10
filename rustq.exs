@@ -70,6 +70,49 @@ rust "native/oxc_ex_nif/src/generated_atoms.rs" do
   ])
 end
 
+rust "native/oxc_fmt_nif/src/generated_atoms.rs" do
+  Rustler.atoms([
+    :ok,
+    :error,
+    :print_width,
+    :tab_width,
+    :use_tabs,
+    :semi,
+    :single_quote,
+    :jsx_single_quote,
+    :trailing_comma,
+    :bracket_spacing,
+    :bracket_same_line,
+    :arrow_parens,
+    :end_of_line,
+    :quote_props,
+    :single_attribute_per_line,
+    :object_wrap,
+    :experimental_operator_position,
+    :experimental_ternaries,
+    :embedded_language_formatting,
+    :sort_imports,
+    :sort_tailwindcss,
+    :ignore_case,
+    :sort_side_effects,
+    :order,
+    :newlines_between,
+    :partition_by_newline,
+    :partition_by_comment,
+    :internal_pattern,
+    :config,
+    :stylesheet,
+    :functions,
+    :attributes,
+    :preserve_whitespace,
+    :preserve_duplicates
+  ])
+end
+
+rust "native/oxc_fmt_nif/src/generated_option_helpers.rs" do
+  Rustler.term_helpers(include: [:get, :get_bool, :get_i64, :get_string, :get_string_list, :get_map])
+end
+
 type_key = Rust.path([:a, "r#type"]) <> "()"
 
 rust "native/oxc_ex_nif/src/generated_term_helpers.rs" do

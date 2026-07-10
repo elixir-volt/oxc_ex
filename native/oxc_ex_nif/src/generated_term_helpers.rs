@@ -3,41 +3,78 @@
 fn get<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>> {
     term.map_get(key).ok()
 }
-fn is_nil(term: Term) -> bool {
-    term.is_atom() && term.atom_to_string().ok().as_deref() == Some("nil")
+fn is_nil<'a>(term: Term<'a>) -> bool {
+    if term.is_atom() {
+        match term.atom_to_string() {
+            Ok(value) => value == "nil",
+            Err(_reason) => false,
+        }
+    } else {
+        false
+    }
 }
 fn opt<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>> {
-    get(term, key).filter(|t| !is_nil(*t))
+    match get(term, key) {
+        Some(value) => if is_nil(value) { None } else { Some(value) }
+        None => None,
+    }
 }
 fn str_val<'a>(term: Term<'a>, key: rustler::Atom) -> String {
     match get(term, key) {
-        Some(t) => {
-            t.decode::<String>().or_else(|_| t.atom_to_string()).unwrap_or_default()
+        Some(value) => {
+            match value.decode::<String>() {
+                Ok(decoded) => decoded,
+                Err(_reason) => value.atom_to_string().unwrap_or_default(),
+            }
         }
         None => String::new(),
     }
 }
-fn bool_val(term: Term, key: rustler::Atom) -> bool {
-    get(term, key).and_then(|t| t.decode::<bool>().ok()).unwrap_or(false)
+fn bool_val<'a>(term: Term<'a>, key: rustler::Atom) -> bool {
+    match get(term, key) {
+        Some(value) => value.decode().unwrap_or_default(),
+        None => false,
+    }
 }
-fn f64_val(term: Term, key: rustler::Atom) -> f64 {
-    get(term, key)
-        .and_then(|t| {
-            t.decode::<f64>().ok().or_else(|| t.decode::<i64>().ok().map(|i| i as f64))
-        })
-        .unwrap_or(0.0)
+fn f64_val<'a>(term: Term<'a>, key: rustler::Atom) -> f64 {
+    match get(term, key) {
+        Some(value) => {
+            match value.decode::<f64>() {
+                Ok(decoded) => decoded,
+                Err(_reason) => {
+                    match value.decode::<i64>() {
+                        Ok(decoded) => decoded as f64,
+                        Err(_reason) => 0.0,
+                    }
+                }
+            }
+        }
+        None => 0.0,
+    }
 }
 fn list_val<'a>(term: Term<'a>, key: rustler::Atom) -> Vec<Term<'a>> {
-    get(term, key).and_then(|t| t.decode::<Vec<Term>>().ok()).unwrap_or_default()
+    match get(term, key) {
+        Some(value) => value.decode().unwrap_or_default(),
+        None => Vec::new(),
+    }
 }
-fn type_atom(term: Term) -> Option<rustler::Atom> {
-    get(term, a::r#type()).and_then(|t| t.decode::<rustler::Atom>().ok())
+fn type_atom<'a>(term: Term<'a>) -> Option<rustler::Atom> {
+    match get(term, atoms::r#type()) {
+        Some(value) => value.decode::<rustler::Atom>().ok(),
+        None => None,
+    }
 }
-fn type_eq(term: Term, expected: rustler::Atom) -> bool {
+fn type_eq<'a>(term: Term<'a>, expected: rustler::Atom) -> bool {
     type_atom(term) == Some(expected)
 }
-fn type_str(term: Term) -> String {
-    get(term, a::r#type())
-        .and_then(|t| t.atom_to_string().ok())
-        .unwrap_or_else(|| "<no type>".into())
+fn type_str<'a>(term: Term<'a>) -> String {
+    match get(term, atoms::r#type()) {
+        Some(value) => {
+            match value.atom_to_string() {
+                Ok(decoded) => decoded,
+                Err(_reason) => String::from("<no type>"),
+            }
+        }
+        None => String::from("<no type>"),
+    }
 }

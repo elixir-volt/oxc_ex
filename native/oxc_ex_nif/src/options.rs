@@ -1,27 +1,17 @@
 use std::collections::BTreeMap;
 
-use rustler::{types::map::MapIterator, ListIterator, Term};
+use rustler::{types::map::MapIterator, Term};
 
 use crate::atoms;
 
-fn get_key<'a>(term: Term<'a>, atom_key: rustler::Atom, _string_key: &str) -> Option<Term<'a>> {
-    term.map_get(atom_key).ok()
-}
-
-fn get_bool(term: Term<'_>, atom_key: rustler::Atom, string_key: &str) -> Option<bool> {
-    get_key(term, atom_key, string_key)?.decode::<bool>().ok()
-}
-
-fn get_string(term: Term<'_>, atom_key: rustler::Atom, string_key: &str) -> Option<String> {
-    string_from_term(get_key(term, atom_key, string_key)?)
-}
+include!("generated_option_helpers.rs");
 
 fn get_optional_string(
     term: Term<'_>,
     atom_key: rustler::Atom,
-    string_key: &str,
+    _string_key: &str,
 ) -> Option<Option<String>> {
-    let value = get_key(term, atom_key, string_key)?;
+    let value = get(term, atom_key)?;
 
     if is_nil(value) {
         Some(None)
@@ -30,37 +20,12 @@ fn get_optional_string(
     }
 }
 
-fn get_string_list(
-    term: Term<'_>,
-    atom_key: rustler::Atom,
-    string_key: &str,
-) -> Option<Vec<String>> {
-    let value = get_key(term, atom_key, string_key)?;
-    let iter = value.decode::<ListIterator>().ok()?;
-
-    let mut strings = Vec::new();
-    for item in iter {
-        strings.push(string_from_term(item)?);
-    }
-    Some(strings)
-}
-
-fn get_term_list<'a>(
-    term: Term<'a>,
-    atom_key: rustler::Atom,
-    string_key: &str,
-) -> Option<Vec<Term<'a>>> {
-    let value = get_key(term, atom_key, string_key)?;
-    let iter = value.decode::<ListIterator>().ok()?;
-    Some(iter.collect())
-}
-
 fn get_string_map(
     term: Term<'_>,
     atom_key: rustler::Atom,
-    string_key: &str,
+    _string_key: &str,
 ) -> Option<BTreeMap<String, String>> {
-    let value = get_key(term, atom_key, string_key)?;
+    let value = get(term, atom_key)?;
     let iter = MapIterator::new(value)?;
 
     let mut map = BTreeMap::new();
@@ -74,10 +39,6 @@ fn string_from_term(term: Term<'_>) -> Option<String> {
     term.decode::<String>()
         .ok()
         .or_else(|| term.atom_to_string().ok())
-}
-
-fn is_nil(term: Term<'_>) -> bool {
-    term.is_atom() && term.atom_to_string().ok().as_deref() == Some("nil")
 }
 
 pub fn default_jsx_runtime() -> String {
@@ -114,22 +75,22 @@ impl TransformInput {
     pub fn from_term(term: Term<'_>) -> Self {
         let mut opts = Self::default();
 
-        if let Some(value) = get_string(term, atoms::jsx(), "jsx") {
+        if let Some(value) = get_string(term, atoms::jsx()) {
             opts.jsx_runtime = value;
         }
-        if let Some(value) = get_string(term, atoms::jsx_factory(), "jsx_factory") {
+        if let Some(value) = get_string(term, atoms::jsx_factory()) {
             opts.jsx_factory = value;
         }
-        if let Some(value) = get_string(term, atoms::jsx_fragment(), "jsx_fragment") {
+        if let Some(value) = get_string(term, atoms::jsx_fragment()) {
             opts.jsx_fragment = value;
         }
-        if let Some(value) = get_string(term, atoms::import_source(), "import_source") {
+        if let Some(value) = get_string(term, atoms::import_source()) {
             opts.import_source = value;
         }
-        if let Some(value) = get_string(term, atoms::target(), "target") {
+        if let Some(value) = get_string(term, atoms::target()) {
             opts.target = value;
         }
-        if let Some(value) = get_bool(term, atoms::sourcemap(), "sourcemap") {
+        if let Some(value) = get_bool(term, atoms::sourcemap()) {
             opts.sourcemap = value;
         }
 
@@ -151,7 +112,7 @@ impl MinifyInput {
     pub fn from_term(term: Term<'_>) -> Self {
         let mut opts = Self::default();
 
-        if let Some(value) = get_bool(term, atoms::mangle(), "mangle") {
+        if let Some(value) = get_bool(term, atoms::mangle()) {
             opts.mangle = value;
         }
 
@@ -167,8 +128,8 @@ pub struct BundleFile<'a> {
 impl<'a> BundleFile<'a> {
     pub fn from_term(term: Term<'a>) -> Option<Self> {
         Some(Self {
-            path: get_string(term, atoms::path(), "path")?,
-            source: get_key(term, atoms::source(), "source").filter(|term| !is_nil(*term))?,
+            path: get_string(term, atoms::path())?,
+            source: get(term, atoms::source()).filter(|term| !is_nil(*term))?,
         })
     }
 }
@@ -182,9 +143,9 @@ pub struct BundleEntry<'a> {
 
 impl<'a> BundleEntry<'a> {
     pub fn from_term(term: Term<'a>) -> Option<Self> {
-        let import = get_string(term, atoms::import(), "import")?;
+        let import = get_string(term, atoms::import())?;
         let name = get_optional_string(term, atoms::name(), "name").flatten();
-        let source = get_key(term, atoms::source(), "source").filter(|term| !is_nil(*term));
+        let source = get(term, atoms::source()).filter(|term| !is_nil(*term));
 
         Some(Self {
             name,
@@ -235,37 +196,37 @@ impl<'a> BundleOptions<'a> {
             ..Self::default()
         };
 
-        if let Some(value) = get_term_list(term, atoms::entries(), "entries") {
+        if let Some(value) = get_term_list(term, atoms::entries()) {
             opts.entries = value
                 .into_iter()
                 .filter_map(BundleEntry::from_term)
                 .collect();
         }
-        if let Some(value) = get_term_list(term, atoms::files(), "files") {
+        if let Some(value) = get_term_list(term, atoms::files()) {
             opts.files = value
                 .into_iter()
                 .filter_map(BundleFile::from_term)
                 .collect();
         }
-        if let Some(value) = get_string(term, atoms::entry(), "entry") {
+        if let Some(value) = get_string(term, atoms::entry()) {
             opts.entry = value;
         }
-        if let Some(value) = get_string(term, atoms::cwd(), "cwd") {
+        if let Some(value) = get_string(term, atoms::cwd()) {
             opts.cwd = value;
         }
         if let Some(value) = get_optional_string(term, atoms::outdir(), "outdir") {
             opts.outdir = value;
         }
-        if let Some(value) = get_string(term, atoms::format(), "format") {
+        if let Some(value) = get_string(term, atoms::format()) {
             opts.format = value;
         }
-        if let Some(value) = get_string(term, atoms::exports(), "exports") {
+        if let Some(value) = get_string(term, atoms::exports()) {
             opts.exports = value;
         }
-        if let Some(value) = get_bool(term, atoms::minify(), "minify") {
+        if let Some(value) = get_bool(term, atoms::minify()) {
             opts.minify = value;
         }
-        if let Some(value) = get_bool(term, atoms::treeshake(), "treeshake") {
+        if let Some(value) = get_bool(term, atoms::treeshake()) {
             opts.treeshake = value;
         }
         if let Some(value) = get_optional_string(term, atoms::banner(), "banner") {
@@ -283,44 +244,40 @@ impl<'a> BundleOptions<'a> {
         if let Some(value) = get_string_map(term, atoms::module_types(), "module_types") {
             opts.module_types = value;
         }
-        if let Some(value) = get_string_list(term, atoms::external(), "external") {
+        if let Some(value) = get_string_list(term, atoms::external()) {
             opts.external = value;
         }
-        if let Some(value) = get_string(
-            term,
-            atoms::preserve_entry_signatures(),
-            "preserve_entry_signatures",
-        ) {
+        if let Some(value) = get_string(term, atoms::preserve_entry_signatures()) {
             opts.preserve_entry_signatures = value;
         }
-        if let Some(value) = get_string_list(term, atoms::conditions(), "conditions") {
+        if let Some(value) = get_string_list(term, atoms::conditions()) {
             opts.conditions = value;
         }
-        if let Some(value) = get_string_list(term, atoms::main_fields(), "main_fields") {
+        if let Some(value) = get_string_list(term, atoms::main_fields()) {
             opts.main_fields = value;
         }
-        if let Some(value) = get_string_list(term, atoms::modules(), "modules") {
+        if let Some(value) = get_string_list(term, atoms::modules()) {
             opts.modules = value;
         }
-        if let Some(value) = get_bool(term, atoms::sourcemap(), "sourcemap") {
+        if let Some(value) = get_bool(term, atoms::sourcemap()) {
             opts.sourcemap = value;
         }
-        if let Some(value) = get_bool(term, atoms::drop_console(), "drop_console") {
+        if let Some(value) = get_bool(term, atoms::drop_console()) {
             opts.drop_console = value;
         }
-        if let Some(value) = get_string(term, atoms::jsx(), "jsx") {
+        if let Some(value) = get_string(term, atoms::jsx()) {
             opts.jsx_runtime = value;
         }
-        if let Some(value) = get_string(term, atoms::jsx_factory(), "jsx_factory") {
+        if let Some(value) = get_string(term, atoms::jsx_factory()) {
             opts.jsx_factory = value;
         }
-        if let Some(value) = get_string(term, atoms::jsx_fragment(), "jsx_fragment") {
+        if let Some(value) = get_string(term, atoms::jsx_fragment()) {
             opts.jsx_fragment = value;
         }
-        if let Some(value) = get_string(term, atoms::import_source(), "import_source") {
+        if let Some(value) = get_string(term, atoms::import_source()) {
             opts.import_source = value;
         }
-        if let Some(value) = get_string(term, atoms::target(), "target") {
+        if let Some(value) = get_string(term, atoms::target()) {
             opts.target = value;
         }
         if let Some(value) =

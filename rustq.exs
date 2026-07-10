@@ -70,6 +70,10 @@ rust "native/oxc_ex_nif/src/generated_atoms.rs" do
   ])
 end
 
+rust "native/oxc_lint_nif/src/generated_atoms.rs" do
+  Rustler.atoms([:ok, :error, :warn, :deny, :allow])
+end
+
 rust "native/oxc_fmt_nif/src/generated_atoms.rs" do
   Rustler.atoms([
     :ok,

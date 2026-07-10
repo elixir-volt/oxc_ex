@@ -11,15 +11,7 @@ use oxc_semantic::SemanticBuilder;
 use oxc_span::SourceType;
 use rustler::{Binary, Encoder, Env, Error, NifMap, NifResult, Term};
 
-mod atoms {
-    rustler::atoms! {
-        ok,
-        error,
-        warn,
-        deny,
-        allow,
-    }
-}
+include!("generated_atoms.rs");
 
 #[derive(NifMap)]
 struct Diagnostic {

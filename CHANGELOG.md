@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.17.3 - 2026-07-13
+
+### Changed
+
+- `OXC.splice/3` now accepts multiple statements in a single source or iodata replacement.
+
+### Fixed
+
+- Preserve floating-point literal values when converting parsed ESTree JSON to BEAM terms.
+
 ## 0.17.2 - 2026-07-07
 
 ### Added

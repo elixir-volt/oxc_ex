@@ -8,9 +8,8 @@ use oxc_semantic::SemanticBuilder;
 use oxc_span::SourceType;
 use oxc_transformer::{EnvOptions, JsxRuntime, TransformOptions, Transformer};
 use rustler::{Binary, Encoder, Env, Error, NifResult, SerdeTerm, Term};
-use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
-use serde::Serialize;
-use std::fmt;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::path::Path;
 
 use crate::atoms;
@@ -28,115 +27,48 @@ fn encode_ok<'a, T: Serialize>(env: Env<'a>, value: T) -> NifResult<Term<'a>> {
     Ok((atoms::ok(), SerdeTerm(value)).encode(env))
 }
 
-#[derive(Clone, Copy)]
-struct BeamTermSeed<'a> {
-    env: Env<'a>,
-}
-
-impl<'de, 'a> DeserializeSeed<'de> for BeamTermSeed<'a> {
-    type Value = Term<'a>;
-
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-    where
-        D: de::Deserializer<'de>,
-    {
-        deserializer.deserialize_any(self)
-    }
-}
-
-impl<'de, 'a> Visitor<'de> for BeamTermSeed<'a> {
-    type Value = Term<'a>;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a JSON value")
-    }
-
-    fn visit_unit<E>(self) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        Ok(Option::<u8>::None.encode(self.env))
-    }
-
-    fn visit_none<E>(self) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        self.visit_unit()
-    }
-
-    fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        Ok(value.encode(self.env))
-    }
-
-    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        Ok(value.encode(self.env))
-    }
-
-    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        Ok(value.encode(self.env))
-    }
-
-    fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        Ok(value.encode(self.env))
-    }
-
-    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        Ok(value.encode(self.env))
-    }
-
-    fn visit_string<E>(self, value: String) -> Result<Self::Value, E>
-    where
-        E: de::Error,
-    {
-        Ok(value.encode(self.env))
-    }
-
-    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
-    where
-        A: SeqAccess<'de>,
-    {
-        let mut values = Vec::with_capacity(seq.size_hint().unwrap_or(0));
-        while let Some(value) = seq.next_element_seed(self)? {
-            values.push(value);
+fn json_value_to_term<'a>(env: Env<'a>, value: Value) -> Result<Term<'a>, String> {
+    match value {
+        Value::Null => Ok(Option::<u8>::None.encode(env)),
+        Value::Bool(value) => Ok(value.encode(env)),
+        Value::Number(value) => {
+            if let Some(value) = value.as_i64() {
+                Ok(value.encode(env))
+            } else if let Some(value) = value.as_u64() {
+                Ok(value.encode(env))
+            } else if let Some(value) = value.as_f64() {
+                Ok(value.encode(env))
+            } else {
+                Err(format!("invalid JSON number: {value}"))
+            }
         }
-        Ok(values.encode(self.env))
-    }
+        Value::String(value) => Ok(value.encode(env)),
+        Value::Array(values) => values
+            .into_iter()
+            .map(|value| json_value_to_term(env, value))
+            .collect::<Result<Vec<_>, _>>()
+            .map(|values| values.encode(env)),
+        Value::Object(values) => {
+            let mut map = Term::map_new(env);
 
-    fn visit_map<A>(self, mut map_access: A) -> Result<Self::Value, A::Error>
-    where
-        A: MapAccess<'de>,
-    {
-        let mut map = Term::map_new(self.env);
-        while let Some(key) = map_access.next_key::<String>()? {
-            let value = map_access.next_value_seed(self)?;
-            map = map
-                .map_put(key, value)
-                .map_err(|_| de::Error::custom("failed to encode JSON object as BEAM map"))?;
+            for (key, value) in values {
+                map = map
+                    .map_put(key, json_value_to_term(env, value)?)
+                    .map_err(|_| "failed to encode JSON object as BEAM map".to_string())?;
+            }
+
+            Ok(map)
         }
-        Ok(map)
     }
 }
 
-fn json_str_to_term<'a>(env: Env<'a>, json: &str) -> Result<Term<'a>, serde_json::Error> {
+fn json_str_to_term<'a>(env: Env<'a>, json: &str) -> Result<Term<'a>, String> {
     let mut deserializer = serde_json::Deserializer::from_str(json);
     deserializer.disable_recursion_limit();
-    BeamTermSeed { env }.deserialize(&mut deserializer)
+
+    Value::deserialize(&mut deserializer)
+        .map_err(|error| error.to_string())
+        .and_then(|value| json_value_to_term(env, value))
 }
 
 pub fn source_from_term<'a>(term: Term<'a>) -> NifResult<Binary<'a>> {

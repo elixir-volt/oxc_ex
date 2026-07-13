@@ -722,7 +722,7 @@ defmodule OXC do
   defp splice_statements(stmts, placeholder, items) do
     Enum.flat_map(stmts, fn
       %{type: :expression_statement, expression: %{type: :identifier, name: ^placeholder}} ->
-        Enum.map(items, &resolve_splice_statement/1)
+        Enum.flat_map(items, &resolve_splice_statements/1)
 
       other ->
         [other]
@@ -749,20 +749,22 @@ defmodule OXC do
     end)
   end
 
-  defp resolve_splice_statement(item) when is_binary(item) or is_list(item) do
+  defp resolve_splice_statements(item) when is_binary(item) or is_list(item) do
     item = IO.iodata_to_binary(item)
 
     case parse(item, "splice.js") do
-      {:ok, %{body: [stmt]}} ->
-        stmt
+      {:ok, %{body: statements}} ->
+        statements
 
-      _ ->
-        %{body: [%{body: %{body: [stmt]}}]} = parse!("function _(){" <> item <> "}", "splice.js")
-        stmt
+      {:error, _errors} ->
+        %{body: [%{body: %{body: statements}}]} =
+          parse!("function _(){" <> item <> "}", "splice.js")
+
+        statements
     end
   end
 
-  defp resolve_splice_statement(%{type: _} = node), do: node
+  defp resolve_splice_statements(%{type: _} = node), do: [node]
 
   defp resolve_splice_property(item) when is_binary(item) or is_list(item) do
     ast = parse!(["({", item, "})"], "splice.js")

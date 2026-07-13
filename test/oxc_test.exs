@@ -14,6 +14,14 @@ defmodule OXCTest do
       assert declarator.init.value == 1
     end
 
+    test "parses floating-point literals as BEAM floats" do
+      {:ok, ast} = OXC.parse("const x = 1.23", "test.js")
+      [declaration] = ast.body
+      [declarator] = declaration.declarations
+
+      assert declarator.init.value == 1.23
+    end
+
     test "parses binary expression" do
       {:ok, ast} = OXC.parse("1 + 2", "test.js")
       [stmt] = ast.body

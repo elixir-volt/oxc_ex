@@ -9,6 +9,13 @@ defmodule OXC.CodegenTest do
       assert js == source
     end
 
+    test "roundtrips floating-point literals" do
+      source = "const x = 1.23;\n"
+      {:ok, ast} = OXC.parse(source, "test.js")
+      {:ok, js} = OXC.codegen(ast)
+      assert js == source
+    end
+
     test "generates from manual AST" do
       ast = %{
         type: :program,
@@ -330,6 +337,17 @@ defmodule OXC.CodegenTest do
         |> OXC.codegen!()
 
       assert js =~ "return 42"
+    end
+
+    test "splices multiple statements from one source item" do
+      js =
+        OXC.parse!("function f() { $body }", "t.js")
+        |> OXC.splice(:body, "const x = 1; const y = 2; return x + y;")
+        |> OXC.codegen!()
+
+      assert js =~ "const x = 1"
+      assert js =~ "const y = 2"
+      assert js =~ "return x + y"
     end
 
     test "splices iodata statement items" do

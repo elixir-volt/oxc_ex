@@ -182,3 +182,36 @@ generate :lint_native_stubs, "lib/oxc/lint/native/generated_stubs.ex" do
     Rustler.nif_stubs_from_source(lint_source, lint_nifs, OXC.Lint.Native.GeneratedStubs)
   end)
 end
+
+native_nif_groups = [
+  {"native/oxc_ex_nif/src/parse.rs",
+   [parse: [lifetime: :a], valid: [], transform: [lifetime: :a], minify: [lifetime: :a]]},
+  {"native/oxc_ex_nif/src/bundle.rs",
+   [bundle: [lifetime: :a], bundle_entry: [lifetime: :a], bundle_run: [lifetime: :a]]},
+  {"native/oxc_ex_nif/src/imports.rs", [select: [lifetime: :a]]},
+  {"native/oxc_ex_nif/src/transform_many.rs", [transform_many: [lifetime: :a]]},
+  {"native/oxc_ex_nif/src/codegen.rs", [codegen: [lifetime: :a]]}
+]
+
+native_nif_functions =
+  Enum.flat_map(native_nif_groups, fn {source, nifs} ->
+    metadata = source |> RustQ.Syn.parse_file!() |> RustQ.Syn.functions()
+
+    Enum.map(nifs, fn {name, _opts} ->
+      implementation = "#{name}_impl"
+      function = Enum.find(metadata, &(&1.name == implementation))
+
+      function || raise ArgumentError, "NIF implementation #{implementation} not found in #{source}"
+      {name, function}
+    end)
+  end)
+
+rust :native_nifs, "native/oxc_ex_nif/src/generated_nifs.rs" do
+  Enum.flat_map(native_nif_groups, fn {source, nifs} ->
+    Rustler.nif_exports_from_source(source, nifs, schedule: :dirty_cpu)
+  end)
+end
+
+generate :native_stubs, "lib/oxc/native/generated_stubs.ex" do
+  content(Rustler.nif_stubs_from_functions(native_nif_functions, OXC.Native.GeneratedStubs))
+end

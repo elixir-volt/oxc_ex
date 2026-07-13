@@ -123,8 +123,7 @@ fn computed_member<'a>(
 
 // ── NIF entry point ──
 
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn codegen<'a>(env: Env<'a>, ast: Term<'a>) -> NifResult<Term<'a>> {
+pub fn codegen_impl<'a>(env: Env<'a>, ast: Term<'a>) -> NifResult<Term<'a>> {
     let allocator = Allocator::default();
     let b = AstBuilder::new(&allocator);
 

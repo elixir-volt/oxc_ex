@@ -657,8 +657,7 @@ fn output_path(opts: &BundleOptions<'_>, filename: &str) -> Option<String> {
     })
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn bundle_run<'a>(env: Env<'a>, opts_term: Term<'a>) -> NifResult<Term<'a>> {
+pub fn bundle_run_impl<'a>(env: Env<'a>, opts_term: Term<'a>) -> NifResult<Term<'a>> {
     let opts = BundleOptions::from_term(opts_term);
 
     match bundle_run_project(&opts) {
@@ -667,8 +666,7 @@ pub fn bundle_run<'a>(env: Env<'a>, opts_term: Term<'a>) -> NifResult<Term<'a>> 
     }
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn bundle<'a>(
+pub fn bundle_impl<'a>(
     env: Env<'a>,
     files: Vec<(String, Term<'a>)>,
     opts_term: Term<'a>,
@@ -686,8 +684,11 @@ pub fn bundle<'a>(
     }
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn bundle_entry<'a>(env: Env<'a>, entry: String, opts_term: Term<'a>) -> NifResult<Term<'a>> {
+pub fn bundle_entry_impl<'a>(
+    env: Env<'a>,
+    entry: String,
+    opts_term: Term<'a>,
+) -> NifResult<Term<'a>> {
     let opts = BundleOptions::from_term(opts_term);
 
     match bundle_filesystem_entry(entry, &opts) {

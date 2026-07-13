@@ -264,8 +264,7 @@ pub fn transform_source(source: &str, filename: &str, opts: &TransformInput) -> 
 
 // -- NIF entry points --
 
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn parse<'a>(env: Env<'a>, source_term: Term<'a>, filename: &str) -> NifResult<Term<'a>> {
+pub fn parse_impl<'a>(env: Env<'a>, source_term: Term<'a>, filename: &str) -> NifResult<Term<'a>> {
     let source_binary = source_from_term(source_term)?;
     let source = binary_to_str(&source_binary)?;
     let allocator = Allocator::default();
@@ -288,8 +287,7 @@ pub fn parse<'a>(env: Env<'a>, source_term: Term<'a>, filename: &str) -> NifResu
     Ok((atoms::ok(), term).encode(env))
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn valid(source_term: Term<'_>, filename: &str) -> NifResult<bool> {
+pub fn valid_impl(source_term: Term<'_>, filename: &str) -> NifResult<bool> {
     let source_binary = source_from_term(source_term)?;
     let source = binary_to_str(&source_binary)?;
     let allocator = Allocator::default();
@@ -298,8 +296,7 @@ pub fn valid(source_term: Term<'_>, filename: &str) -> NifResult<bool> {
     Ok(ret.errors.is_empty())
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn transform<'a>(
+pub fn transform_impl<'a>(
     env: Env<'a>,
     source_term: Term<'a>,
     filename: &str,
@@ -311,8 +308,7 @@ pub fn transform<'a>(
     Ok(transform_source(source, filename, &opts).to_term(env))
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn minify<'a>(
+pub fn minify_impl<'a>(
     env: Env<'a>,
     source_term: Term<'a>,
     filename: &str,

@@ -427,8 +427,7 @@ impl<'a> Visit<'a> for ImportCollector {
     }
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn select<'a>(
+pub fn select_impl<'a>(
     env: Env<'a>,
     source_term: Term<'a>,
     filename: &str,

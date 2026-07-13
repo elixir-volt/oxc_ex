@@ -4,8 +4,7 @@ use rustler::{Encoder, Env, NifResult, Term};
 use crate::options::TransformInput;
 use crate::parse::{binary_to_str, source_from_term, transform_source, TransformOutput};
 
-#[rustler::nif(schedule = "DirtyCpu")]
-pub fn transform_many<'a>(
+pub fn transform_many_impl<'a>(
     env: Env<'a>,
     inputs: Vec<(Term<'a>, String)>,
     opts_term: Term<'a>,

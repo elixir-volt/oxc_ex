@@ -156,3 +156,29 @@ rust "native/oxc_ex_nif/src/generated_ast_decoders.rs" do
     ]
   )
 end
+
+fmt_source = "native/oxc_fmt_nif/src/lib.rs"
+fmt_nifs = [format: [lifetime: :a]]
+
+rust :fmt_nifs, "native/oxc_fmt_nif/src/generated_nifs.rs" do
+  Rustler.nif_exports_from_source(fmt_source, fmt_nifs, schedule: :dirty_cpu)
+end
+
+generate :fmt_native_stubs, "lib/oxc/format/native/generated_stubs.ex" do
+  build(fn ->
+    Rustler.nif_stubs_from_source(fmt_source, fmt_nifs, OXC.Format.Native.GeneratedStubs)
+  end)
+end
+
+lint_source = "native/oxc_lint_nif/src/lib.rs"
+lint_nifs = [lint: [lifetime: :a]]
+
+rust :lint_nifs, "native/oxc_lint_nif/src/generated_nifs.rs" do
+  Rustler.nif_exports_from_source(lint_source, lint_nifs, schedule: :dirty_cpu)
+end
+
+generate :lint_native_stubs, "lib/oxc/lint/native/generated_stubs.ex" do
+  build(fn ->
+    Rustler.nif_stubs_from_source(lint_source, lint_nifs, OXC.Lint.Native.GeneratedStubs)
+  end)
+end

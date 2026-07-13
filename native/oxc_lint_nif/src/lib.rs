@@ -134,8 +134,7 @@ fn binary_to_str<'a, 'b>(binary: &'b Binary<'a>) -> NifResult<&'b str> {
     std::str::from_utf8(binary).map_err(|_| Error::BadArg)
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
-fn lint<'a>(
+fn lint_impl<'a>(
     env: Env<'a>,
     source_term: Term<'a>,
     filename: &str,
@@ -219,5 +218,7 @@ fn lint<'a>(
 
     Ok((atoms::ok(), diagnostics).encode(env))
 }
+
+include!("generated_nifs.rs");
 
 rustler::init!("Elixir.OXC.Lint.Native");

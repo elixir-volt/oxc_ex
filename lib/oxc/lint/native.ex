@@ -24,5 +24,5 @@ defmodule OXC.Lint.Native do
 
   @spec lint(iodata(), String.t(), [String.t()], [{String.t(), String.t()}], boolean()) ::
           {:ok, [map()]} | {:error, [String.t()]}
-  def lint(_source, _filename, _plugins, _rules, _fix), do: :erlang.nif_error(:nif_not_loaded)
+  use OXC.Lint.Native.GeneratedStubs
 end

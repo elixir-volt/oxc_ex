@@ -225,8 +225,7 @@ fn binary_to_str<'a, 'b>(binary: &'b Binary<'a>) -> NifResult<&'b str> {
     std::str::from_utf8(binary).map_err(|_| Error::BadArg)
 }
 
-#[rustler::nif(schedule = "DirtyCpu")]
-fn format<'a>(
+fn format_impl<'a>(
     env: Env<'a>,
     source_term: Term<'a>,
     filename: &str,
@@ -252,5 +251,7 @@ fn format<'a>(
 
     Ok((atoms::ok(), formatted).encode(env))
 }
+
+include!("generated_nifs.rs");
 
 rustler::init!("Elixir.OXC.Format.Native");

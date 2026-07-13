@@ -2,6 +2,39 @@ use RustQ.Config
 
 alias RustQ.{Rust, Rustler}
 
+codegen_atom_sources = [
+  "native/oxc_ex_nif/src/codegen.rs",
+  "native/oxc_ex_nif/src/generated_term_helpers.rs",
+  "native/oxc_ex_nif/src/generated_ast_decoders.rs"
+]
+
+codegen_atom_renames = %{
+  "r#type" => "type",
+  "async_field" => "async",
+  "await_field" => "await",
+  "static_field" => "static",
+  "super_class" => "superClass",
+  "super_expr" => "super"
+}
+
+codegen_atoms =
+  codegen_atom_sources
+  |> Enum.flat_map(fn path ->
+    path |> File.read!() |> RustQ.Syn.atom_references!(module: "a")
+  end)
+  |> Enum.uniq()
+  |> Enum.sort()
+  |> Enum.map(fn name ->
+    case Map.fetch(codegen_atom_renames, name) do
+      {:ok, value} -> {name, value}
+      :error -> name
+    end
+  end)
+
+rust :codegen_atoms, "native/oxc_ex_nif/src/generated_codegen_atoms.rs" do
+  Rustler.atoms(codegen_atoms, module: false)
+end
+
 rust "native/oxc_ex_nif/src/generated_atoms.rs" do
   Rustler.atoms([
     :ok,

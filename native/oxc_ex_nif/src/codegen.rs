@@ -18,50 +18,7 @@ use crate::atoms;
 use crate::error::error_to_term;
 
 mod a {
-    rustler::atoms! {
-        r#type = "type",
-        block, body, expression, argument, arguments, left, right, operator,
-        test, consequent, alternate, init, update, object, callee,
-        optional, computed, name, value, raw, cooked, tail,
-        declarations, kind, id, params, rest, generator,
-        async_field = "async", await_field = "await",
-        source, specifiers, imported, exported, local, declaration,
-        properties, elements, key, shorthand, method, quasis, expressions,
-        tag, quasi, prefix, delegate, label, cases, handler, param,
-        finalizer, discriminant, super_class = "superClass",
-        meta, property, regex, pattern, flags, bigint,
-        static_field = "static",
-
-        // node types
-        program, expression_statement, block_statement, return_statement,
-        variable_declaration, function_declaration, class_declaration,
-        if_statement, for_statement, for_in_statement, for_of_statement,
-        while_statement, do_while_statement, switch_statement, try_statement,
-        throw_statement, break_statement, continue_statement,
-        labeled_statement, empty_statement, debugger_statement, with_statement,
-        import_declaration, export_named_declaration,
-        export_default_declaration, export_all_declaration,
-
-        identifier, identifier_reference, literal,
-        numeric_literal, string_literal, boolean_literal, null_literal,
-        big_int_literal, reg_exp_literal,
-        binary_expression, logical_expression, unary_expression,
-        update_expression, assignment_expression, conditional_expression,
-        call_expression, new_expression,
-        member_expression, static_member_expression, computed_member_expression,
-        chain_expression, object_expression, array_expression,
-        arrow_function_expression, function_expression, class_expression,
-        template_literal, tagged_template_expression,
-        sequence_expression, this_expression,
-        super_expr = "super",
-        await_expression, yield_expression, import_expression,
-        meta_property, parenthesized_expression,
-        spread_element, rest_element,
-        object_pattern, array_pattern, assignment_pattern,
-        import_specifier, import_default_specifier, import_namespace_specifier,
-        export_specifier,
-        method_definition, property_definition, static_block,
-    }
+    include!("generated_codegen_atoms.rs");
 }
 
 type R<T> = Result<T, String>;

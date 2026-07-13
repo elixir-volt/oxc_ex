@@ -6,20 +6,6 @@ use crate::atoms;
 
 include!("generated_option_helpers.rs");
 
-fn get_optional_string(
-    term: Term<'_>,
-    atom_key: rustler::Atom,
-    _string_key: &str,
-) -> Option<Option<String>> {
-    let value = get(term, atom_key)?;
-
-    if is_nil(value) {
-        Some(None)
-    } else {
-        string_from_term(value).map(Some)
-    }
-}
-
 fn get_string_map(
     term: Term<'_>,
     atom_key: rustler::Atom,
@@ -144,7 +130,7 @@ pub struct BundleEntry<'a> {
 impl<'a> BundleEntry<'a> {
     pub fn from_term(term: Term<'a>) -> Option<Self> {
         let import = get_string(term, atoms::import())?;
-        let name = get_optional_string(term, atoms::name(), "name").flatten();
+        let name = get_optional_string(term, atoms::name()).flatten();
         let source = get(term, atoms::source()).filter(|term| !is_nil(*term));
 
         Some(Self {
@@ -214,7 +200,7 @@ impl<'a> BundleOptions<'a> {
         if let Some(value) = get_string(term, atoms::cwd()) {
             opts.cwd = value;
         }
-        if let Some(value) = get_optional_string(term, atoms::outdir(), "outdir") {
+        if let Some(value) = get_optional_string(term, atoms::outdir()) {
             opts.outdir = value;
         }
         if let Some(value) = get_string(term, atoms::format()) {
@@ -229,13 +215,13 @@ impl<'a> BundleOptions<'a> {
         if let Some(value) = get_bool(term, atoms::treeshake()) {
             opts.treeshake = value;
         }
-        if let Some(value) = get_optional_string(term, atoms::banner(), "banner") {
+        if let Some(value) = get_optional_string(term, atoms::banner()) {
             opts.banner = value;
         }
-        if let Some(value) = get_optional_string(term, atoms::footer(), "footer") {
+        if let Some(value) = get_optional_string(term, atoms::footer()) {
             opts.footer = value;
         }
-        if let Some(value) = get_optional_string(term, atoms::preamble(), "preamble") {
+        if let Some(value) = get_optional_string(term, atoms::preamble()) {
             opts.preamble = value;
         }
         if let Some(value) = get_string_map(term, atoms::define(), "define") {
@@ -280,19 +266,13 @@ impl<'a> BundleOptions<'a> {
         if let Some(value) = get_string(term, atoms::target()) {
             opts.target = value;
         }
-        if let Some(value) =
-            get_optional_string(term, atoms::entry_file_names(), "entry_file_names")
-        {
+        if let Some(value) = get_optional_string(term, atoms::entry_file_names()) {
             opts.entry_file_names = value;
         }
-        if let Some(value) =
-            get_optional_string(term, atoms::chunk_file_names(), "chunk_file_names")
-        {
+        if let Some(value) = get_optional_string(term, atoms::chunk_file_names()) {
             opts.chunk_file_names = value;
         }
-        if let Some(value) =
-            get_optional_string(term, atoms::asset_file_names(), "asset_file_names")
-        {
+        if let Some(value) = get_optional_string(term, atoms::asset_file_names()) {
             opts.asset_file_names = value;
         }
 

@@ -30,6 +30,17 @@ fn get_string<'a>(term: Term<'a>, key: rustler::Atom) -> Option<String> {
         None => None,
     }
 }
+fn get_optional_string<'a>(
+    term: Term<'a>,
+    key: rustler::Atom,
+) -> Option<Option<String>> {
+    match get(term, key) {
+        Some(value) => {
+            if is_nil(value) { Some(None) } else { get_string(term, key).map(Some) }
+        }
+        None => None,
+    }
+}
 fn get_string_list<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Vec<String>> {
     match get(term, key) {
         Some(value) => value.decode::<Vec<String>>().ok(),

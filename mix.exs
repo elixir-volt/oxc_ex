@@ -76,7 +76,7 @@ defmodule OXC.MixProject do
     [
       {:rustler, "~> 0.36 or ~> 0.37 or ~> 0.38", optional: true},
       {:rustler_precompiled, "~> 0.8"},
-      {:rustq, "~> 0.9.4", only: [:dev, :test], runtime: false},
+      {:rustq, "~> 0.9.10", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},

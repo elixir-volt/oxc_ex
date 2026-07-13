@@ -128,7 +128,15 @@ end
 
 rust "native/oxc_ex_nif/src/generated_option_helpers.rs" do
   Rustler.term_helpers(
-    include: [:get, :is_nil, :get_bool, :get_string, :get_string_list, :get_term_list]
+    include: [
+      :get,
+      :is_nil,
+      :get_bool,
+      :get_string,
+      :get_optional_string,
+      :get_string_list,
+      :get_term_list
+    ]
   )
 end
 

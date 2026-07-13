@@ -1,6 +1,6 @@
 use RustQ.Config
 
-alias RustQ.{Rust, Rustler}
+alias RustQ.Rustler.{Atom, Nif, Term}
 
 codegen_atom_sources = [
   "native/oxc_ex_nif/src/codegen.rs",
@@ -32,11 +32,11 @@ codegen_atoms =
   end)
 
 rust :codegen_atoms, "native/oxc_ex_nif/src/generated_codegen_atoms.rs" do
-  Rustler.atoms(codegen_atoms, module: false)
+  Atom.declaration(codegen_atoms, module: false)
 end
 
 rust "native/oxc_ex_nif/src/generated_atoms.rs" do
-  Rustler.atoms([
+  Atom.declaration([
     :ok,
     :error,
     {:atom_static, "static"},
@@ -104,11 +104,11 @@ rust "native/oxc_ex_nif/src/generated_atoms.rs" do
 end
 
 rust "native/oxc_lint_nif/src/generated_atoms.rs" do
-  Rustler.atoms([:ok, :error, :warn, :deny, :allow])
+  Atom.declaration([:ok, :error, :warn, :deny, :allow])
 end
 
 rust "native/oxc_fmt_nif/src/generated_atoms.rs" do
-  Rustler.atoms([
+  Atom.declaration([
     :ok,
     :error,
     :print_width,
@@ -147,20 +147,20 @@ rust "native/oxc_fmt_nif/src/generated_atoms.rs" do
 end
 
 rust "native/oxc_fmt_nif/src/generated_option_helpers.rs" do
-  Rustler.term_helpers(include: [:get, :get_bool, :get_i64, :get_string, :get_string_list, :get_map])
+  Term.helpers(include: [:get, :get_bool, :get_i64, :get_string, :get_string_list, :get_map])
 end
 
-type_key = Rust.path([:a, "r#type"]) <> "()"
+type_key = "a::r#type()"
 
 rust "native/oxc_ex_nif/src/generated_term_helpers.rs" do
-  Rustler.term_helpers(
+  Term.helpers(
     type_key: type_key,
     include: [:get, :is_nil, :opt, :str_val, :bool_val, :f64_val, :list_val, :type_atom, :type_eq, :type_str]
   )
 end
 
 rust "native/oxc_ex_nif/src/generated_option_helpers.rs" do
-  Rustler.term_helpers(
+  Term.helpers(
     include: [
       :get,
       :is_nil,
@@ -174,13 +174,13 @@ rust "native/oxc_ex_nif/src/generated_option_helpers.rs" do
 end
 
 rust "native/oxc_ex_nif/src/generated_ast_decoders.rs" do
-  Rustler.term_decoder(:ProgramInput,
+  Term.decoder(:ProgramInput,
     fields: [
       body: [type: {:vec, "Term<'a>"}, key: "a::body()", required: true]
     ]
   )
 
-  Rustler.term_decoder(:IfStatementInput,
+  Term.decoder(:IfStatementInput,
     result: "R",
     fields: [
       test: [type: "Term<'a>", key: "a::test()", required: true],
@@ -191,60 +191,43 @@ rust "native/oxc_ex_nif/src/generated_ast_decoders.rs" do
 end
 
 fmt_source = "native/oxc_fmt_nif/src/lib.rs"
-fmt_nifs = [format: [lifetime: :a]]
+fmt_nifs = [format: []]
 
 rust :fmt_nifs, "native/oxc_fmt_nif/src/generated_nifs.rs" do
-  Rustler.nif_exports_from_source(fmt_source, fmt_nifs, schedule: :dirty_cpu)
+  Nif.wrappers_from_source(fmt_source, fmt_nifs, schedule: :dirty_cpu)
 end
 
 generate :fmt_native_stubs, "lib/oxc/format/native/generated_stubs.ex" do
   build(fn ->
-    Rustler.nif_stubs_from_source(fmt_source, fmt_nifs, OXC.Format.Native.GeneratedStubs)
+    Nif.stubs_from_source(fmt_source, fmt_nifs, OXC.Format.Native.GeneratedStubs)
   end)
 end
 
 lint_source = "native/oxc_lint_nif/src/lib.rs"
-lint_nifs = [lint: [lifetime: :a]]
+lint_nifs = [lint: []]
 
 rust :lint_nifs, "native/oxc_lint_nif/src/generated_nifs.rs" do
-  Rustler.nif_exports_from_source(lint_source, lint_nifs, schedule: :dirty_cpu)
+  Nif.wrappers_from_source(lint_source, lint_nifs, schedule: :dirty_cpu)
 end
 
 generate :lint_native_stubs, "lib/oxc/lint/native/generated_stubs.ex" do
   build(fn ->
-    Rustler.nif_stubs_from_source(lint_source, lint_nifs, OXC.Lint.Native.GeneratedStubs)
+    Nif.stubs_from_source(lint_source, lint_nifs, OXC.Lint.Native.GeneratedStubs)
   end)
 end
 
 native_nif_groups = [
-  {"native/oxc_ex_nif/src/parse.rs",
-   [parse: [lifetime: :a], valid: [], transform: [lifetime: :a], minify: [lifetime: :a]]},
-  {"native/oxc_ex_nif/src/bundle.rs",
-   [bundle: [lifetime: :a], bundle_entry: [lifetime: :a], bundle_run: [lifetime: :a]]},
-  {"native/oxc_ex_nif/src/imports.rs", [select: [lifetime: :a]]},
-  {"native/oxc_ex_nif/src/transform_many.rs", [transform_many: [lifetime: :a]]},
-  {"native/oxc_ex_nif/src/codegen.rs", [codegen: [lifetime: :a]]}
+  {"native/oxc_ex_nif/src/parse.rs", [parse: [], valid: [], transform: [], minify: []]},
+  {"native/oxc_ex_nif/src/bundle.rs", [bundle: [], bundle_entry: [], bundle_run: []]},
+  {"native/oxc_ex_nif/src/imports.rs", [select: []]},
+  {"native/oxc_ex_nif/src/transform_many.rs", [transform_many: []]},
+  {"native/oxc_ex_nif/src/codegen.rs", [codegen: []]}
 ]
 
-native_nif_functions =
-  Enum.flat_map(native_nif_groups, fn {source, nifs} ->
-    metadata = source |> RustQ.Syn.parse_file!() |> RustQ.Syn.functions()
-
-    Enum.map(nifs, fn {name, _opts} ->
-      implementation = "#{name}_impl"
-      function = Enum.find(metadata, &(&1.name == implementation))
-
-      function || raise ArgumentError, "NIF implementation #{implementation} not found in #{source}"
-      {name, function}
-    end)
-  end)
-
 rust :native_nifs, "native/oxc_ex_nif/src/generated_nifs.rs" do
-  Enum.flat_map(native_nif_groups, fn {source, nifs} ->
-    Rustler.nif_exports_from_source(source, nifs, schedule: :dirty_cpu)
-  end)
+  Nif.wrappers_from_sources(native_nif_groups, schedule: :dirty_cpu)
 end
 
 generate :native_stubs, "lib/oxc/native/generated_stubs.ex" do
-  content(Rustler.nif_stubs_from_functions(native_nif_functions, OXC.Native.GeneratedStubs))
+  content(Nif.stubs_from_sources(native_nif_groups, OXC.Native.GeneratedStubs))
 end

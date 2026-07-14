@@ -1,6 +1,6 @@
 %{
-  "liboxc_lint_nif-v0.17.2-nif-2.15-aarch64-apple-darwin.so.tar.gz" => "sha256:1734eb94f39fb32755926545c53925cd6df6c7365c7085cbce52b29f7b159aec",
-  "liboxc_lint_nif-v0.17.2-nif-2.15-aarch64-unknown-linux-gnu.so.tar.gz" => "sha256:7e939f8c35d817960583ec6232ebb03ca6f27f3b7455659dc2a60dc6c89c9ae2",
-  "liboxc_lint_nif-v0.17.2-nif-2.15-x86_64-apple-darwin.so.tar.gz" => "sha256:353b508145de91ee48854933584c5c0596f00dde1596f62baf9c1d4a30535d0a",
-  "liboxc_lint_nif-v0.17.2-nif-2.15-x86_64-unknown-linux-gnu.so.tar.gz" => "sha256:2784b7723c05eea18b130878c33907c8240cc826471c13ce2453a43722df2f16",
+  "liboxc_lint_nif-v0.17.3-nif-2.15-aarch64-apple-darwin.so.tar.gz" => "sha256:4c84dbdf495d5efbbb02ee4dbaeb8debd8c9322b2c5032073467c3d394d371da",
+  "liboxc_lint_nif-v0.17.3-nif-2.15-aarch64-unknown-linux-gnu.so.tar.gz" => "sha256:f18bf285ce63ab778d7e8947f89f61d3b078a665e32bf66171a6ff05bfe01c89",
+  "liboxc_lint_nif-v0.17.3-nif-2.15-x86_64-apple-darwin.so.tar.gz" => "sha256:a05e33cda848a6d8a6d951dc82e52a447992945d209a9f67d2541cc59115f5a2",
+  "liboxc_lint_nif-v0.17.3-nif-2.15-x86_64-unknown-linux-gnu.so.tar.gz" => "sha256:86a69fb69e967a6c73351b5f97e78da97c1df94c5389e94e41e20952180d4d57",
 }

@@ -28,6 +28,6 @@ fn decode_if_statement_input<'a>(term: Term<'a>) -> R<IfStatementInput<'a>> {
         alternate: term
             .map_get(a::alternate())
             .ok()
-            .and_then(|t| t.decode::<Term<'a>>().ok()),
+            .and_then(|term| term.decode::<Term<'a>>().ok()),
     })
 }

@@ -1,14 +1,14 @@
 defmodule OXC.MixProject do
   use Mix.Project
 
-  @version "0.17.3"
+  @version "0.17.4"
   @source_url "https://github.com/elixir-volt/oxc_ex"
 
   def project do
     [
       app: :oxc,
       version: @version,
-      elixir: "~> 1.19",
+      elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       aliases: aliases(),

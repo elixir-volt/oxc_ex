@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.17.4 - 2026-07-13
+
+### Fixed
+
+- Restore the declared minimum Elixir version to 1.17; the generated NIF and AST APIs remain compatible with Elixir 1.17 and later.
+
 ## 0.17.3 - 2026-07-13
 
 ### Changed

@@ -26,6 +26,19 @@ defmodule OXC.LintTest do
       assert diags == []
     end
 
+    test "recognizes configured environments" do
+      {:ok, diags} =
+        OXC.Lint.run("document; process; describe; missingGlobal;", "test.js",
+          rules: %{"no-undef" => :deny},
+          env: [:browser, :node, :mocha]
+        )
+
+      assert Enum.any?(diags, &(&1.message =~ "missingGlobal"))
+      refute Enum.any?(diags, &(&1.message =~ "document"))
+      refute Enum.any?(diags, &(&1.message =~ "process"))
+      refute Enum.any?(diags, &(&1.message =~ "describe"))
+    end
+
     test "recognizes configured globals" do
       {:ok, diags} =
         OXC.Lint.run("knownGlobal(); missingGlobal();", "test.js",

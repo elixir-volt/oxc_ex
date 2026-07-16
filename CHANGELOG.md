@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `OXC.Lint.run/3` accepts Oxlint environments such as `:browser`, `:node`, and `:mocha`.
+
 ## 0.17.5 - 2026-07-13
 
 ### Added

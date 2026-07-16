@@ -5,10 +5,7 @@ fn lint<'a>(
     env: Env<'a>,
     source_term: Term<'a>,
     filename: &str,
-    plugins: Vec<String>,
-    rules: Vec<(String, String)>,
-    globals: Vec<(String, String)>,
-    fix: bool,
+    input: LintInput,
 ) -> NifResult<Term<'a>> {
-    lint_impl(env, source_term, filename, plugins, rules, globals, fix)
+    lint_impl(env, source_term, filename, input)
 }

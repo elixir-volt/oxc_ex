@@ -14,6 +14,15 @@ use rustler::{Binary, Encoder, Env, Error, NifMap, NifResult, Term};
 include!("generated_atoms.rs");
 
 #[derive(NifMap)]
+struct LintInput {
+    plugins: Vec<String>,
+    rules: Vec<(String, String)>,
+    envs: Vec<(String, bool)>,
+    globals: Vec<(String, String)>,
+    fix: bool,
+}
+
+#[derive(NifMap)]
 struct Diagnostic {
     rule: String,
     message: String,
@@ -72,6 +81,7 @@ struct LintConfig {
 fn build_lint_config(
     plugins: &[String],
     rules: &[(String, String)],
+    envs: &[(String, bool)],
     globals: &[(String, String)],
 ) -> Result<LintConfig, String> {
     let lint_plugins = if plugins.is_empty() {
@@ -87,7 +97,12 @@ fn build_lint_config(
         .map(|(name, value)| (name.clone(), serde_json::Value::String(value.clone())))
         .collect::<serde_json::Map<_, _>>();
 
-    let oxlintrc = serde_json::from_value(serde_json::json!({"globals": globals}))
+    let envs = envs
+        .iter()
+        .map(|(name, enabled)| (name.clone(), serde_json::Value::Bool(*enabled)))
+        .collect::<serde_json::Map<_, _>>();
+
+    let oxlintrc = serde_json::from_value(serde_json::json!({"env": envs, "globals": globals}))
         .map_err(|e| format!("Invalid lint globals: {e}"))?;
 
     let mut builder =
@@ -154,10 +169,7 @@ fn lint_impl<'a>(
     env: Env<'a>,
     source_term: Term<'a>,
     filename: &str,
-    plugins: Vec<String>,
-    rules: Vec<(String, String)>,
-    globals: Vec<(String, String)>,
-    fix: bool,
+    input: LintInput,
 ) -> NifResult<Term<'a>> {
     let source_binary = source_from_term(source_term)?;
     let source = binary_to_str(&source_binary)?;
@@ -177,12 +189,17 @@ fn lint_impl<'a>(
         return Ok((atoms::error(), error_msgs).encode(env));
     }
 
-    let lint_config = match build_lint_config(&plugins, &rules, &globals) {
-        Ok(v) => v,
-        Err(e) => return Ok((atoms::error(), vec![e]).encode(env)),
-    };
+    let lint_config =
+        match build_lint_config(&input.plugins, &input.rules, &input.envs, &input.globals) {
+            Ok(v) => v,
+            Err(e) => return Ok((atoms::error(), vec![e]).encode(env)),
+        };
 
-    let fix_kind = if fix { FixKind::SafeFix } else { FixKind::None };
+    let fix_kind = if input.fix {
+        FixKind::SafeFix
+    } else {
+        FixKind::None
+    };
 
     let linter = Linter::new(
         LintOptions {

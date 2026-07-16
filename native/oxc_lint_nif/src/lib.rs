@@ -9,28 +9,11 @@ use oxc_linter::{
 use oxc_parser::{ParseOptions, Parser};
 use oxc_semantic::SemanticBuilder;
 use oxc_span::SourceType;
-use rustler::{Binary, Encoder, Env, Error, NifMap, NifResult, Term};
+use rustler::{Atom, Binary, Encoder, Env, Error, NifResult, Term};
 
 include!("generated_atoms.rs");
 
-#[derive(NifMap)]
-struct LintInput {
-    plugins: Vec<String>,
-    rules: Vec<(String, String)>,
-    envs: Vec<(String, bool)>,
-    globals: Vec<(String, String)>,
-    fix: bool,
-}
-
-#[derive(NifMap)]
-struct Diagnostic {
-    rule: String,
-    message: String,
-    severity: rustler::Atom,
-    span: (u32, u32),
-    labels: Vec<(u32, u32)>,
-    help: Option<String>,
-}
+include!("generated_types.rs");
 
 fn parse_plugins(plugin_strs: &[String]) -> LintPlugins {
     let mut plugins = LintPlugins::empty();

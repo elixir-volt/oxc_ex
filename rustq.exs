@@ -229,7 +229,8 @@ native_nif_groups = [
   {"native/oxc_ex_nif/src/bundle.rs", [bundle: [], bundle_entry: [], bundle_run: []]},
   {"native/oxc_ex_nif/src/imports.rs", [select: []]},
   {"native/oxc_ex_nif/src/transform_many.rs", [transform_many: []]},
-  {"native/oxc_ex_nif/src/codegen.rs", [codegen: []]}
+  {"native/oxc_ex_nif/src/codegen.rs", [codegen: []]},
+  {"native/oxc_ex_nif/src/native_pipeline.rs", [codegen_native: []]}
 ]
 
 rust :native_nifs, "native/oxc_ex_nif/src/generated_nifs.rs" do

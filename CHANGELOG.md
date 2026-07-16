@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add a pipe-friendly native representation for `parse!` → `splice` → `codegen` pipelines that avoids serializing generated ESTree nodes through the BEAM.
+
 ## 0.17.6 - 2026-07-13
 
 ### Added

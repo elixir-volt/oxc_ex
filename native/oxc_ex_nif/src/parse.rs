@@ -16,7 +16,7 @@ use crate::atoms;
 use crate::error::{error_to_term, format_errors};
 use crate::options::{MinifyInput, TransformInput};
 
-fn parser_options() -> ParseOptions {
+pub(crate) fn parser_options() -> ParseOptions {
     ParseOptions {
         parse_regular_expression: true,
         ..ParseOptions::default()
@@ -224,7 +224,9 @@ pub fn valid_impl(source_term: Term<'_>, filename: &str) -> NifResult<bool> {
     let source = binary_to_str(&source_binary)?;
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(filename).unwrap_or_default();
-    let ret = Parser::new(&allocator, source, source_type).parse();
+    let ret = Parser::new(&allocator, source, source_type)
+        .with_options(parser_options())
+        .parse();
     Ok(ret.errors.is_empty())
 }
 

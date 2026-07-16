@@ -32,5 +32,7 @@ defmodule OXC.Native do
   @spec select(iodata(), String.t(), list()) :: {:ok, list()} | {:error, [String.t()]}
   @spec transform_many([{iodata(), String.t()}], map()) :: list()
   @spec codegen(map()) :: {:ok, String.t()} | {:error, list()}
+  @spec codegen_native(String.t(), String.t(), [{String.t(), [String.t()]}]) ::
+          {:ok, String.t()} | {:error, list()}
   use OXC.Native.GeneratedStubs
 end

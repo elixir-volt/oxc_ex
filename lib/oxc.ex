@@ -19,6 +19,8 @@ defmodule OXC do
   are snake_case atoms (e.g. `:import_declaration`, `:variable_declaration`).
   """
 
+  alias OXC.NativeProgram
+
   defmodule Error do
     defexception [:message, :errors]
 
@@ -31,6 +33,7 @@ defmodule OXC do
   @type error :: %{message: String.t()}
   @type code_with_sourcemap :: %{code: String.t(), sourcemap: String.t()}
   @type parse_result :: {:ok, ast()} | {:error, [error()]}
+  @type native_parse_result :: {:ok, NativeProgram.t()} | {:error, [error()]}
   @type transform_result :: {:ok, String.t() | code_with_sourcemap()} | {:error, [error()]}
   @type bundle_result :: {:ok, String.t() | code_with_sourcemap()} | {:error, [error()]}
 
@@ -46,6 +49,9 @@ defmodule OXC do
   Returns `{:ok, ast}` where `ast` is a map with atom keys, or
   `{:error, errors}` with a list of parse error maps.
 
+  Passing `:native` as the third argument returns a native program for pipe-friendly
+  `parse` → `splice` → `codegen` workflows that do not need to inspect the ESTree in Elixir.
+
   ## Examples
 
       iex> {:ok, ast} = OXC.parse("const x = 1", "test.js")
@@ -58,10 +64,21 @@ defmodule OXC do
       true
   """
   @spec parse(source(), String.t()) :: parse_result()
+  @spec parse(source(), String.t(), :native) :: native_parse_result()
   def parse(source, filename) do
     case OXC.Native.parse(source, filename) do
       {:ok, ast} -> {:ok, atomize_term_keys(ast)}
       {:error, errors} -> {:error, atomize_term_keys(errors)}
+    end
+  end
+
+  def parse(source, filename, :native) do
+    source = IO.iodata_to_binary(source)
+
+    if valid?(source, filename) do
+      {:ok, %NativeProgram{source: source, filename: filename}}
+    else
+      parse(source, filename)
     end
   end
 
@@ -75,14 +92,19 @@ defmodule OXC do
       :program
   """
   @spec parse!(source(), String.t()) :: ast()
+  @spec parse!(source(), String.t(), :native) :: NativeProgram.t()
   def parse!(source, filename) do
-    case parse(source, filename) do
-      {:ok, ast} ->
-        ast
+    unwrap_parse!(parse(source, filename))
+  end
 
-      {:error, errors} ->
-        raise Error, message: "OXC parse error: #{inspect(errors)}", errors: errors
-    end
+  def parse!(source, filename, :native) do
+    unwrap_parse!(parse(source, filename, :native))
+  end
+
+  defp unwrap_parse!({:ok, ast}), do: ast
+
+  defp unwrap_parse!({:error, errors}) do
+    raise Error, message: "OXC parse error: #{inspect(errors)}", errors: errors
   end
 
   @doc """
@@ -572,10 +594,11 @@ defmodule OXC do
   # ── Codegen ──
 
   @doc """
-  Generate JavaScript source code from an AST map.
+  Generate JavaScript source code from an AST map or native program.
 
-  Takes an ESTree AST (as returned by `parse/2` or constructed manually)
-  and produces formatted JavaScript source code using OXC's code generator.
+  Takes an ESTree AST (as returned by `parse/2` or constructed manually), or a native
+  program returned by `parse/3`, and produces formatted JavaScript source code using
+  OXC's code generator.
 
   Handles operator precedence, indentation, and semicolon insertion.
 
@@ -597,7 +620,14 @@ defmodule OXC do
       iex> js =~ "const x = 42"
       true
   """
-  @spec codegen(ast()) :: {:ok, String.t()} | {:error, [error()]}
+  @spec codegen(ast() | NativeProgram.t()) :: {:ok, String.t()} | {:error, [error()]}
+  def codegen(%NativeProgram{source: source, filename: filename, splices: splices}) do
+    case OXC.Native.codegen_native(source, filename, splices) do
+      {:ok, code} -> {:ok, code}
+      {:error, errors} -> {:error, atomize_term_keys(errors)}
+    end
+  end
+
   def codegen(ast) do
     case OXC.Native.codegen(deatomize_ast(ast)) do
       {:ok, code} -> {:ok, code}
@@ -608,7 +638,7 @@ defmodule OXC do
   @doc """
   Like `codegen/1` but raises on errors.
   """
-  @spec codegen!(ast()) :: String.t()
+  @spec codegen!(ast() | NativeProgram.t()) :: String.t()
   def codegen!(ast) do
     case codegen(ast) do
       {:ok, code} ->
@@ -645,7 +675,13 @@ defmodule OXC do
       iex> OXC.codegen!(ast) =~ "const myVar = 1"
       true
   """
+  @spec bind(NativeProgram.t(), keyword()) :: no_return()
   @spec bind(ast(), keyword()) :: ast()
+  def bind(%NativeProgram{}, _bindings) do
+    raise ArgumentError,
+          "native programs support source splices only; use the default ESTree representation for bind/2"
+  end
+
   def bind(ast, bindings) when is_list(bindings) do
     lookup = Map.new(bindings, fn {k, v} -> {"$#{k}", resolve_binding(v)} end)
 
@@ -677,7 +713,8 @@ defmodule OXC do
   Finds expression statements, shorthand object properties, or array elements
   whose identifier name starts with `$` and replaces them with the provided
   nodes. Accepts a single item or a list. Strings and iodata items are
-  auto-parsed as JS.
+  auto-parsed as JS. Native programs accept source and iodata replacements; use
+  the default ESTree representation for raw AST replacements.
 
   ## Examples
 
@@ -693,7 +730,20 @@ defmodule OXC do
       iex> js =~ "b: 2" and js =~ "c: 3"
       true
   """
+  @spec splice(NativeProgram.t(), atom(), iodata() | [iodata()]) :: NativeProgram.t()
   @spec splice(ast(), atom(), ast() | iodata() | [ast() | iodata()]) :: ast()
+  def splice(%NativeProgram{} = program, name, replacement) when is_atom(name) do
+    items =
+      replacement
+      |> List.wrap()
+      |> Enum.map(fn
+        item when is_binary(item) or is_list(item) -> IO.iodata_to_binary(item)
+        _item -> raise ArgumentError, "native splices accept only source code or iodata"
+      end)
+
+    %{program | splices: program.splices ++ [{Atom.to_string(name), items}]}
+  end
+
   def splice(ast, name, replacement) when is_atom(name) do
     placeholder = "$#{name}"
     items = List.wrap(replacement)

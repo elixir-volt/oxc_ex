@@ -446,4 +446,83 @@ defmodule OXC.CodegenTest do
       assert js =~ "listUsers"
     end
   end
+
+  describe "native parse/splice/codegen pipeline" do
+    test "matches ESTree splice output for every supported source context" do
+      cases = [
+        {"function f() { $body }", :body, ["const x = 1;", "const y = 2;", "return x + y;"]},
+        {"function f() { $action }", :action, "return 42;"},
+        {"function f() { $body }", :body, "const x = 1; const y = 2; return x + y;"},
+        {"function f() { $action }", :action, [["return ", "42;"]]},
+        {"const obj = {a: 1, $rest}", :rest, ["b: 2", "c: 3"]},
+        {"const arr = [$items]", :items, ["1", "\"two\"", "true"]},
+        {"function f() { $debug; return 1; }", :debug, []},
+        {"const x = 1;\n$more", :more, ["const y = 2;", "const z = 3;"]}
+      ]
+
+      Enum.each(cases, fn {source, name, replacement} ->
+        estree_code =
+          source
+          |> OXC.parse!("t.js")
+          |> OXC.splice(name, replacement)
+          |> OXC.codegen!()
+
+        native_code =
+          source
+          |> OXC.parse!("t.js", :native)
+          |> OXC.splice(name, replacement)
+          |> OXC.codegen!()
+
+        assert native_code == estree_code
+      end)
+    end
+
+    test "applies sequential splices in pipeline order" do
+      code =
+        "$first; $second;"
+        |> OXC.parse!("t.js", :native)
+        |> OXC.splice(:first, "one();")
+        |> OXC.splice(:second, "two();")
+        |> OXC.codegen!()
+
+      assert code =~ "one();"
+      assert code =~ "two();"
+      refute code =~ "$first"
+      refute code =~ "$second"
+    end
+
+    test "returns and raises idiomatic OXC parse errors" do
+      assert {:error, [%{message: message}]} = OXC.parse("const = ;", "bad.js", :native)
+      assert is_binary(message)
+
+      assert_raise OXC.Error, fn -> OXC.parse!("const = ;", "bad.js", :native) end
+    end
+
+    test "returns and raises idiomatic OXC codegen errors" do
+      program =
+        "function f() { $body }"
+        |> OXC.parse!("t.js", :native)
+        |> OXC.splice(:body, "const = ;")
+
+      assert {:error, [%{message: message}]} = OXC.codegen(program)
+      assert is_binary(message)
+      assert_raise OXC.Error, fn -> OXC.codegen!(program) end
+    end
+
+    test "rejects raw ESTree replacements explicitly" do
+      program = OXC.parse!("function f() { $body }", "t.js", :native)
+
+      assert_raise ArgumentError, ~r/native splices accept only source code/, fn ->
+        OXC.splice(program, :body, %{type: :return_statement})
+      end
+    end
+
+    test "rejects bind operations explicitly" do
+      program = OXC.parse!("const $name = 1", "t.js", :native)
+
+      assert_raise ArgumentError, ~r/default ESTree representation for bind\/2/, fn ->
+        OXC.bind(program, name: "value")
+      end
+    end
+  end
 end

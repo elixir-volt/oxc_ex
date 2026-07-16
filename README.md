@@ -86,6 +86,23 @@ OXC.codegen!(ast)
 # "function add(a, b) {\n\treturn a + b;\n}\n"
 ```
 
+For generated-source pipelines that do not need to inspect the ESTree in Elixir, use the
+native representation. The same pipe-friendly API parses replacements, splices nodes, and
+generates code without serializing the generated AST through the BEAM:
+
+```elixir
+js =
+  template
+  |> OXC.parse!("page-entry.ts", :native)
+  |> OXC.splice(:imports, import_statements)
+  |> OXC.splice(:function_definitions, function_definitions)
+  |> OXC.codegen!()
+```
+
+Native splices accept source code or iodata and support statement, object-property, and
+array-element placeholders. Use the default ESTree representation when replacements are
+raw AST maps or the resulting tree must be inspected in Elixir.
+
 ### Bind (Quasiquoting)
 
 Parse a JS template with `$placeholders`, substitute values, and generate code.

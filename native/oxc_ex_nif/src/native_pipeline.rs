@@ -36,16 +36,22 @@ impl<'a> SpliceVisitor<'a> {
         let mut statements = OxcVec::new_in(self.allocator);
 
         for source in self.replacements.clone() {
-            let parsed = Parser::new(self.allocator, source, self.source_type)
+            // A leading empty statement prevents a string literal replacement from
+            // becoming a Program directive, matching the ESTree splice representation.
+            let prefixed = format!(";{source}");
+            let prefixed_source: &'a str = self.allocator.alloc_str(&prefixed);
+            let parsed = Parser::new(self.allocator, prefixed_source, self.source_type)
                 .with_options(parser_options())
                 .parse();
 
             if parsed.errors.is_empty() {
-                statements.extend(parsed.program.body);
+                let mut body = parsed.program.body;
+                body.remove(0);
+                statements.extend(body);
                 continue;
             }
 
-            let wrapped = format!("function __oxc_splice__(){{{source}}}");
+            let wrapped = format!("function __oxc_splice__(){{;{source}}}");
             let wrapped_source: &'a str = self.allocator.alloc_str(&wrapped);
             let parsed = Parser::new(self.allocator, wrapped_source, self.source_type)
                 .with_options(parser_options())
@@ -67,7 +73,9 @@ impl<'a> SpliceVisitor<'a> {
                     .push("Failed to parse statement splice".to_string());
                 return None;
             };
-            statements.extend(function_body.unbox().statements);
+            let mut function_statements = function_body.unbox().statements;
+            function_statements.remove(0);
+            statements.extend(function_statements);
         }
 
         Some(statements)

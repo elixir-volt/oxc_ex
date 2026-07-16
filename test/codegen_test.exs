@@ -457,7 +457,9 @@ defmodule OXC.CodegenTest do
         {"const obj = {a: 1, $rest}", :rest, ["b: 2", "c: 3"]},
         {"const arr = [$items]", :items, ["1", "\"two\"", "true"]},
         {"function f() { $debug; return 1; }", :debug, []},
-        {"const x = 1;\n$more", :more, ["const y = 2;", "const z = 3;"]}
+        {"const x = 1;\n$more", :more, ["const y = 2;", "const z = 3;"]},
+        {"$directive", :directive, ~s|"use strict";|},
+        {"$check", :check, "/foo/.test(value);"}
       ]
 
       Enum.each(cases, fn {source, name, replacement} ->

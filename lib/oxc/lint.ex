@@ -50,6 +50,8 @@ defmodule OXC.Lint do
 
     * `:fix` — compute fix suggestions. Default: `false`
 
+    * `:globals` — map of global names to `:readonly`, `:writable`, or `:off`.
+
     * `:custom_rules` — list of `{module, severity}` tuples for Elixir rules.
       Each module must implement the `OXC.Lint.Rule` behaviour.
 
@@ -92,10 +94,15 @@ defmodule OXC.Lint do
       |> Keyword.get(:rules, %{})
       |> Enum.map(fn {name, severity} -> {to_string(name), severity_to_string(severity)} end)
 
+    globals =
+      opts
+      |> Keyword.get(:globals, %{})
+      |> Enum.map(fn {name, access} -> {to_string(name), global_access_to_string(access)} end)
+
     custom_rules = Keyword.get(opts, :custom_rules, [])
     settings = Keyword.get(opts, :settings, %{})
 
-    case OXC.Lint.Native.lint(source, filename, plugins, rules, fix) do
+    case OXC.Lint.Native.lint(source, filename, plugins, rules, globals, fix) do
       {:ok, builtin_diags} ->
         custom =
           case custom_rules do
@@ -123,6 +130,13 @@ defmodule OXC.Lint do
         raise OXC.Error, message: "OXC lint error: #{inspect(errors)}", errors: errors
     end
   end
+
+  defp global_access_to_string(:readonly), do: "readonly"
+  defp global_access_to_string(:writable), do: "writable"
+  defp global_access_to_string(:off), do: "off"
+  defp global_access_to_string(false), do: "readonly"
+  defp global_access_to_string(true), do: "writable"
+  defp global_access_to_string(access) when is_binary(access), do: access
 
   defp severity_to_string(:deny), do: "deny"
   defp severity_to_string(:warn), do: "warn"

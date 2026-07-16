@@ -69,7 +69,11 @@ struct LintConfig {
     rule_severity_map: std::collections::HashMap<String, AllowWarnDeny>,
 }
 
-fn build_lint_config(plugins: &[String], rules: &[(String, String)]) -> Result<LintConfig, String> {
+fn build_lint_config(
+    plugins: &[String],
+    rules: &[(String, String)],
+    globals: &[(String, String)],
+) -> Result<LintConfig, String> {
     let lint_plugins = if plugins.is_empty() {
         LintPlugins::default()
     } else {
@@ -77,7 +81,19 @@ fn build_lint_config(plugins: &[String], rules: &[(String, String)]) -> Result<L
     };
 
     let mut external_plugin_store = ExternalPluginStore::default();
-    let mut builder = ConfigStoreBuilder::default().with_builtin_plugins(lint_plugins);
+
+    let globals = globals
+        .iter()
+        .map(|(name, value)| (name.clone(), serde_json::Value::String(value.clone())))
+        .collect::<serde_json::Map<_, _>>();
+
+    let oxlintrc = serde_json::from_value(serde_json::json!({"globals": globals}))
+        .map_err(|e| format!("Invalid lint globals: {e}"))?;
+
+    let mut builder =
+        ConfigStoreBuilder::from_oxlintrc(false, oxlintrc, None, &mut external_plugin_store, None)
+            .map_err(|e| format!("Failed to configure lint globals: {e}"))?
+            .with_builtin_plugins(lint_plugins);
 
     for (rule_name, severity_str) in rules {
         let severity = parse_severity(severity_str.as_str());
@@ -140,6 +156,7 @@ fn lint_impl<'a>(
     filename: &str,
     plugins: Vec<String>,
     rules: Vec<(String, String)>,
+    globals: Vec<(String, String)>,
     fix: bool,
 ) -> NifResult<Term<'a>> {
     let source_binary = source_from_term(source_term)?;
@@ -160,7 +177,7 @@ fn lint_impl<'a>(
         return Ok((atoms::error(), error_msgs).encode(env));
     }
 
-    let lint_config = match build_lint_config(&plugins, &rules) {
+    let lint_config = match build_lint_config(&plugins, &rules, &globals) {
         Ok(v) => v,
         Err(e) => return Ok((atoms::error(), vec![e]).encode(env)),
     };

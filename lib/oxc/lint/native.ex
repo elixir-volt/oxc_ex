@@ -22,7 +22,13 @@ defmodule OXC.Lint.Native do
     ),
     version: version
 
-  @spec lint(iodata(), String.t(), [String.t()], [{String.t(), String.t()}], boolean()) ::
-          {:ok, [map()]} | {:error, [String.t()]}
+  @spec lint(
+          iodata(),
+          String.t(),
+          [String.t()],
+          [{String.t(), String.t()}],
+          [{String.t(), String.t()}],
+          boolean()
+        ) :: {:ok, [map()]} | {:error, [String.t()]}
   use OXC.Lint.Native.GeneratedStubs
 end

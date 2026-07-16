@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.17.5 - 2026-07-13
+
+### Added
+
+- `OXC.Lint.run/3` accepts configured read-only, writable, and disabled globals.
 
 ## 0.17.4 - 2026-07-13
 

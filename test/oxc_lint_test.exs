@@ -26,6 +26,17 @@ defmodule OXC.LintTest do
       assert diags == []
     end
 
+    test "recognizes configured globals" do
+      {:ok, diags} =
+        OXC.Lint.run("knownGlobal(); missingGlobal();", "test.js",
+          rules: %{"no-undef" => :deny},
+          globals: %{"knownGlobal" => :readonly}
+        )
+
+      assert Enum.any?(diags, &(&1.message =~ "missingGlobal"))
+      refute Enum.any?(diags, &(&1.message =~ "knownGlobal"))
+    end
+
     test "diagnostic has expected shape" do
       {:ok, [diag | _]} = OXC.Lint.run("x == y", "test.js", rules: %{"eqeqeq" => :warn})
       assert is_binary(diag.rule)

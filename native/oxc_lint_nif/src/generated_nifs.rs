@@ -7,7 +7,8 @@ fn lint<'a>(
     filename: &str,
     plugins: Vec<String>,
     rules: Vec<(String, String)>,
+    globals: Vec<(String, String)>,
     fix: bool,
 ) -> NifResult<Term<'a>> {
-    lint_impl(env, source_term, filename, plugins, rules, fix)
+    lint_impl(env, source_term, filename, plugins, rules, globals, fix)
 }

@@ -10,6 +10,6 @@ defmodule OXC.RustQCodegenTest do
     assert source =~ "pub struct Diagnostic"
     assert source =~ "rustler::NifMap"
     assert source =~ "pub severity: Atom"
-    assert_rust_valid(OXC.Codegen.LintTypes)
+    assert RustQ.valid?(source, "oxc_lint_types.rs")
   end
 end

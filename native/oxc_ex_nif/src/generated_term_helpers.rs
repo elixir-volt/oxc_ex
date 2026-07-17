@@ -14,10 +14,7 @@ fn is_nil<'a>(term: Term<'a>) -> bool {
     }
 }
 fn opt<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>> {
-    match get(term, key) {
-        Some(value) => if is_nil(value) { None } else { Some(value) }
-        None => None,
-    }
+    get(term, key).filter(|value| !is_nil(*value))
 }
 fn str_val<'a>(term: Term<'a>, key: rustler::Atom) -> String {
     match get(term, key) {

@@ -33,8 +33,5 @@ fn get_string_list<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Vec<String>
     }
 }
 fn get_map<'a>(term: Term<'a>, key: rustler::Atom) -> Option<Term<'a>> {
-    match get(term, key) {
-        Some(value) => if value.is_map() { Some(value) } else { None }
-        None => None,
-    }
+    get(term, key).filter(|value| value.is_map())
 }

@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Add x86_64 Windows precompiled parse, format, and lint NIF targets.
+
+### Fixed
+
+- Parse native splice replacements with the source program's JavaScript, JSX, TypeScript, or TSX mode.
+
 ## 0.17.7 - 2026-07-16
 
 ### Added

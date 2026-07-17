@@ -479,6 +479,16 @@ defmodule OXC.CodegenTest do
       end)
     end
 
+    test "parses splice sources with the native program source type" do
+      code =
+        "function f() { $body }"
+        |> OXC.parse!("t.ts", :native)
+        |> OXC.splice(:body, "const value: number = 1;")
+        |> OXC.codegen!()
+
+      assert code =~ "const value: number = 1;"
+    end
+
     test "applies sequential splices in pipeline order" do
       code =
         "$first; $second;"

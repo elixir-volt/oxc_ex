@@ -253,7 +253,7 @@ pub fn codegen_native_impl<'a>(
 
         let mut visitor = SpliceVisitor {
             allocator: &allocator,
-            source_type: SourceType::default(),
+            source_type,
             placeholder: format!("${name}"),
             replacements: replacement_sources,
             errors: Vec::new(),

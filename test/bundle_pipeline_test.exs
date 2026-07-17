@@ -45,7 +45,7 @@ defmodule OXC.BundlePipelineTest do
       |> Bundle.run()
 
     output = Enum.find(result.outputs, &(&1.type == :entry))
-    assert output.path == Path.join(outdir, "app.js")
+    assert Path.expand(output.path) == Path.expand(Path.join(outdir, "app.js"))
     assert File.read!(output.path) == output.code
 
     File.rm_rf!(outdir)

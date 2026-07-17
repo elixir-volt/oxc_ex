@@ -354,10 +354,7 @@ fn bundle_virtual_project<'a>(
         .map_err(|message| vec![message])?;
     let tempdir = TempDir::new()
         .map_err(|error| vec![format!("Failed to create temp directory: {error}")])?;
-    let cwd = tempdir
-        .path()
-        .canonicalize()
-        .unwrap_or_else(|_| tempdir.path().to_path_buf());
+    let cwd = dunce::canonicalize(tempdir.path()).unwrap_or_else(|_| tempdir.path().to_path_buf());
     let written_paths = write_virtual_project(&tempdir, &files)?;
     if !written_paths.iter().any(|path| path == &entry_name) {
         return Err(vec![format!(
@@ -385,8 +382,7 @@ fn bundle_filesystem_entry(
         PathBuf::from(&opts.cwd)
     };
 
-    let cwd = cwd
-        .canonicalize()
+    let cwd = dunce::canonicalize(&cwd)
         .map_err(|error| vec![format!("Failed to resolve bundle cwd: {error}")])?;
 
     let entry_name = relative_entry_name(&entry_path, &entry, &cwd)?;
@@ -395,8 +391,7 @@ fn bundle_filesystem_entry(
 
 fn relative_entry_name(entry_path: &Path, entry: &str, cwd: &Path) -> Result<String, Vec<String>> {
     if entry_path.is_absolute() {
-        Ok(entry_path
-            .canonicalize()
+        Ok(dunce::canonicalize(entry_path)
             .map_err(|error| vec![format!("Failed to resolve bundle entry: {error}")])?
             .strip_prefix(cwd)
             .map_err(|_| vec![format!("Bundle entry {entry:?} is outside cwd {cwd:?}")])?
@@ -492,16 +487,13 @@ fn bundle_run_project<'a>(opts: &BundleOptions<'a>) -> Result<BundleRunResult, V
         } else {
             PathBuf::from(&opts.cwd)
         };
-        cwd.canonicalize()
+        dunce::canonicalize(&cwd)
             .map_err(|error| vec![format!("Failed to resolve bundle cwd: {error}")])?
     } else {
         tempdir = TempDir::new()
             .map_err(|error| vec![format!("Failed to create temp directory: {error}")])?;
         write_virtual_project(&tempdir, &source_files)?;
-        tempdir
-            .path()
-            .canonicalize()
-            .unwrap_or_else(|_| tempdir.path().to_path_buf())
+        dunce::canonicalize(tempdir.path()).unwrap_or_else(|_| tempdir.path().to_path_buf())
     };
 
     let input = opts

@@ -8,6 +8,7 @@ name = "oxc_ex_nif"
 crate-type = ["cdylib"]
 
 [dependencies]
+dunce = "1"
 rustler = { version = "0.38", default-features = false, features = ["derive", "nif_version_2_15", "serde"] }
 rustler_match_spec = { version = "0.1", default-features = false }
 oxc_allocator = "0.130"

@@ -150,7 +150,10 @@ defmodule OXC.LintTest do
 
     test "runs tsgolint headless with encoded payload and normalizes diagnostics" do
       tmp_dir =
-        Path.join(System.tmp_dir!(), "oxc-type-aware-#{System.unique_integer([:positive])}")
+        Path.join(
+          System.tmp_dir!(),
+          "oxc-type-aware-#{System.unique_integer([:positive])} with spaces"
+        )
 
       File.mkdir_p!(tmp_dir)
       on_exit(fn -> File.rm_rf!(tmp_dir) end)
@@ -174,7 +177,7 @@ defmodule OXC.LintTest do
 
       assert diag.rule == "typescript/no-floating-promises"
       assert diag.severity == :deny
-      assert diag.file == file
+      assert Path.expand(diag.file) == Path.expand(file)
       assert diag.span == {1, 5}
 
       payload = tmp_dir |> Path.join("payload.json") |> File.read!() |> Jason.decode!()
@@ -185,7 +188,8 @@ defmodule OXC.LintTest do
       assert payload["report_syntactic"] == true
       assert payload["report_semantic"] == true
       assert payload["source_overrides"] == %{file => "save()"}
-      assert [%{"file_paths" => [^file], "rules" => [rule]}] = payload["configs"]
+      assert [%{"file_paths" => [payload_file], "rules" => [rule]}] = payload["configs"]
+      assert Path.expand(payload_file) == Path.expand(file)
       assert rule == %{"name" => "no-floating-promises", "options" => %{"ignoreVoid" => true}}
     end
 
@@ -354,65 +358,132 @@ defmodule OXC.LintTest do
     end
 
     defp fake_tsgolint(tmp_dir, opts \\ []) do
-      executable = Path.join(tmp_dir, "tsgolint")
       payload_path = Path.join(tmp_dir, "payload.json")
       argv_path = Path.join(tmp_dir, "argv.json")
       exit_status = Keyword.get(opts, :exit_status, 0)
 
-      File.write!(executable, """
-      #!/usr/bin/env python3
-      import json, struct, sys
-      payload = sys.stdin.read()
-      open(#{inspect(payload_path)}, "w").write(payload)
-      open(#{inspect(argv_path)}, "w").write(json.dumps(sys.argv[1:]))
-      data = json.loads(payload)
-      file_path = data["configs"][0]["file_paths"][0]
-      body = json.dumps({
-        "kind": 1,
-        "range": {"pos": 1, "end": 5},
-        "rule": "no-floating-promises",
-        "message": {"id": "no-floating-promises", "description": "Promise is not handled"},
-        "file_path": file_path,
-        "labeled_ranges": [{"label": "promise", "range": {"pos": 1, "end": 5}}]
-      }).encode()
-      sys.stdout.buffer.write(struct.pack("<IB", len(body), 1) + body)
-      sys.exit(#{exit_status})
-      """)
+      if windows?() do
+        write_windows_fake(tmp_dir, "tsgolint", """
+        $payload = [Console]::In.ReadToEnd()
+        [IO.File]::WriteAllText('#{ps_quote(payload_path)}', $payload, [Text.UTF8Encoding]::new($false))
+        $argv = ConvertTo-Json -Compress -InputObject @($args)
+        [IO.File]::WriteAllText('#{ps_quote(argv_path)}', $argv, [Text.UTF8Encoding]::new($false))
+        $data = $payload | ConvertFrom-Json
+        $diagnostic = [ordered]@{
+          kind = 1
+          range = @{pos = 1; end = 5}
+          rule = 'no-floating-promises'
+          message = @{id = 'no-floating-promises'; description = 'Promise is not handled'}
+          file_path = $data.configs[0].file_paths[0]
+          labeled_ranges = @(@{label = 'promise'; range = @{pos = 1; end = 5}})
+        }
+        $body = [Text.Encoding]::UTF8.GetBytes(($diagnostic | ConvertTo-Json -Depth 8 -Compress))
+        $stdout = [Console]::OpenStandardOutput()
+        $length = [BitConverter]::GetBytes([int]$body.Length)
+        $stdout.Write($length, 0, $length.Length)
+        $stdout.WriteByte(1)
+        $stdout.Write($body, 0, $body.Length)
+        exit #{exit_status}
+        """)
+      else
+        executable = Path.join(tmp_dir, "tsgolint")
 
-      File.chmod!(executable, 0o755)
-      executable
+        File.write!(executable, """
+        #!/usr/bin/env python3
+        import json, struct, sys
+        payload = sys.stdin.read()
+        open(#{inspect(payload_path)}, "w").write(payload)
+        open(#{inspect(argv_path)}, "w").write(json.dumps(sys.argv[1:]))
+        data = json.loads(payload)
+        file_path = data["configs"][0]["file_paths"][0]
+        body = json.dumps({
+          "kind": 1,
+          "range": {"pos": 1, "end": 5},
+          "rule": "no-floating-promises",
+          "message": {"id": "no-floating-promises", "description": "Promise is not handled"},
+          "file_path": file_path,
+          "labeled_ranges": [{"label": "promise", "range": {"pos": 1, "end": 5}}]
+        }).encode()
+        sys.stdout.buffer.write(struct.pack("<IB", len(body), 1) + body)
+        sys.exit(#{exit_status})
+        """)
+
+        File.chmod!(executable, 0o755)
+        executable
+      end
     end
 
     defp fake_tsgolint_error(tmp_dir, message) do
-      executable = Path.join(tmp_dir, "tsgolint-error")
+      if windows?() do
+        body = Jason.encode!(%{"error" => message})
 
-      File.write!(executable, """
-      #!/usr/bin/env python3
-      import json, struct, sys
-      sys.stdin.read()
-      body = json.dumps({"error": #{inspect(message)}}).encode()
-      sys.stdout.buffer.write(struct.pack("<IB", len(body), 0) + body)
-      sys.exit(1)
-      """)
+        write_windows_fake(tmp_dir, "tsgolint-error", """
+        [Console]::In.ReadToEnd() | Out-Null
+        $body = [Convert]::FromBase64String('#{Base.encode64(body)}')
+        $stdout = [Console]::OpenStandardOutput()
+        $length = [BitConverter]::GetBytes([int]$body.Length)
+        $stdout.Write($length, 0, $length.Length)
+        $stdout.WriteByte(0)
+        $stdout.Write($body, 0, $body.Length)
+        exit 1
+        """)
+      else
+        executable = Path.join(tmp_dir, "tsgolint-error")
 
-      File.chmod!(executable, 0o755)
-      executable
+        File.write!(executable, """
+        #!/usr/bin/env python3
+        import json, struct, sys
+        sys.stdin.read()
+        body = json.dumps({"error": #{inspect(message)}}).encode()
+        sys.stdout.buffer.write(struct.pack("<IB", len(body), 0) + body)
+        sys.exit(1)
+        """)
+
+        File.chmod!(executable, 0o755)
+        executable
+      end
     end
 
     defp fake_tsgolint_stderr(tmp_dir, message) do
-      executable = Path.join(tmp_dir, "tsgolint-stderr")
+      if windows?() do
+        write_windows_fake(tmp_dir, "tsgolint-stderr", """
+        [Console]::In.ReadToEnd() | Out-Null
+        [Console]::Error.Write('#{ps_quote(message)}')
+        exit 2
+        """)
+      else
+        executable = Path.join(tmp_dir, "tsgolint-stderr")
 
-      File.write!(executable, """
-      #!/usr/bin/env python3
-      import sys
-      sys.stdin.read()
-      sys.stderr.write(#{inspect(message)})
-      sys.exit(2)
-      """)
+        File.write!(executable, """
+        #!/usr/bin/env python3
+        import sys
+        sys.stdin.read()
+        sys.stderr.write(#{inspect(message)})
+        sys.exit(2)
+        """)
 
-      File.chmod!(executable, 0o755)
+        File.chmod!(executable, 0o755)
+        executable
+      end
+    end
+
+    defp write_windows_fake(tmp_dir, name, script) do
+      script_path = Path.join(tmp_dir, "#{name}.ps1")
+      executable = Path.join(tmp_dir, "#{name}.cmd")
+      File.write!(script_path, script)
+
+      native_script_path = String.replace(script_path, "/", "\\")
+
+      File.write!(
+        executable,
+        ~s(@powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "#{native_script_path}" %*\r\n)
+      )
+
       executable
     end
+
+    defp windows?, do: match?({:win32, _name}, :os.type())
+    defp ps_quote(value), do: String.replace(value, "'", "''")
 
     defp real_tsgolint do
       case System.find_executable("tsgolint") do

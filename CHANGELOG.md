@@ -9,6 +9,7 @@
 ### Fixed
 
 - Parse native splice replacements with the source program's JavaScript, JSX, TypeScript, or TSX mode.
+- Preserve Windows paths containing command metacharacters when launching type-aware linting.
 
 ## 0.17.7 - 2026-07-16
 

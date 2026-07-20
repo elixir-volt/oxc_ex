@@ -78,12 +78,10 @@ defmodule OXC.Lint.TypeAware do
 
     try do
       {output, status} =
-        run_tsgolint_command(
-          executable,
-          args,
-          payload_path,
-          stderr_path,
-          Keyword.get(opts, :cwd, File.cwd!())
+        OXC.Process.run(executable, args,
+          stdin_file: payload_path,
+          stderr_file: stderr_path,
+          cd: Keyword.get(opts, :cwd, File.cwd!())
         )
 
       stderr = read_file(stderr_path)
@@ -95,55 +93,6 @@ defmodule OXC.Lint.TypeAware do
   rescue
     exception -> {:error, [Exception.message(exception)]}
   end
-
-  defp run_tsgolint_command(executable, args, payload_path, stderr_path, cwd) do
-    if match?({:win32, _name}, :os.type()) do
-      run_windows_tsgolint(executable, args, payload_path, stderr_path, cwd)
-    else
-      command_args = ["sh", payload_path, stderr_path, executable | args]
-
-      System.cmd(
-        "sh",
-        [
-          "-c",
-          "payload=$1; stderr=$2; shift 2; exec \"$@\" < \"$payload\" 2> \"$stderr\""
-          | command_args
-        ],
-        cd: cwd,
-        stderr_to_stdout: false
-      )
-    end
-  end
-
-  defp run_windows_tsgolint(executable, args, payload_path, stderr_path, cwd) do
-    stdout_path = tmp_path("oxc-tsgolint-stdout")
-    command_path = tmp_path("oxc-tsgolint-runner", ".cmd")
-
-    invocation =
-      [windows_path(executable) | args]
-      |> Enum.map_join(" ", &windows_command_arg/1)
-      |> Kernel.<>(" < #{payload_path |> windows_path() |> windows_command_arg()}")
-      |> Kernel.<>(" > #{stdout_path |> windows_path() |> windows_command_arg()}")
-      |> Kernel.<>(" 2> #{stderr_path |> windows_path() |> windows_command_arg()}")
-
-    File.write!(command_path, "@echo off\r\ncall #{invocation}\r\nexit /b %errorlevel%\r\n")
-
-    try do
-      {_output, status} =
-        System.cmd("cmd.exe", ["/d", "/s", "/c", windows_path(command_path)],
-          cd: cwd,
-          stderr_to_stdout: false
-        )
-
-      {read_file(stdout_path), status}
-    after
-      File.rm(command_path)
-      File.rm(stdout_path)
-    end
-  end
-
-  defp windows_command_arg(arg), do: ~s("#{String.replace(arg, ~s("), ~s(""))}")
-  defp windows_path(path), do: String.replace(path, "/", "\\")
 
   defp write_payload!(payload) do
     path = tmp_path("oxc-tsgolint-payload", ".json")

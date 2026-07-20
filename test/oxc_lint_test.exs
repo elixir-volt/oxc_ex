@@ -152,7 +152,7 @@ defmodule OXC.LintTest do
       tmp_dir =
         Path.join(
           System.tmp_dir!(),
-          "oxc-type-aware-#{System.unique_integer([:positive])} with spaces"
+          "oxc-type-aware-#{System.unique_integer([:positive])} with spaces %PATH% ^ caret"
         )
 
       File.mkdir_p!(tmp_dir)
@@ -472,7 +472,7 @@ defmodule OXC.LintTest do
       executable = Path.join(tmp_dir, "#{name}.cmd")
       File.write!(script_path, script)
 
-      native_script_path = String.replace(script_path, "/", "\\")
+      native_script_path = script_path |> String.replace("/", "\\") |> String.replace("%", "%%")
 
       File.write!(
         executable,

@@ -362,8 +362,8 @@ defmodule OXC.LintTest do
       argv_path = Path.join(tmp_dir, "argv.json")
       exit_status = Keyword.get(opts, :exit_status, 0)
 
-      if windows?() do
-        write_windows_fake(tmp_dir, "tsgolint", """
+      OXC.Test.Command.write!(tmp_dir, "tsgolint",
+        windows: """
         $payload = [Console]::In.ReadToEnd()
         [IO.File]::WriteAllText('#{ps_quote(payload_path)}', $payload, [Text.UTF8Encoding]::new($false))
         $argv = ConvertTo-Json -Compress -InputObject @($args)
@@ -384,11 +384,8 @@ defmodule OXC.LintTest do
         $stdout.WriteByte(1)
         $stdout.Write($body, 0, $body.Length)
         exit #{exit_status}
-        """)
-      else
-        executable = Path.join(tmp_dir, "tsgolint")
-
-        File.write!(executable, """
+        """,
+        unix: """
         #!/usr/bin/env python3
         import json, struct, sys
         payload = sys.stdin.read()
@@ -406,18 +403,15 @@ defmodule OXC.LintTest do
         }).encode()
         sys.stdout.buffer.write(struct.pack("<IB", len(body), 1) + body)
         sys.exit(#{exit_status})
-        """)
-
-        File.chmod!(executable, 0o755)
-        executable
-      end
+        """
+      )
     end
 
     defp fake_tsgolint_error(tmp_dir, message) do
-      if windows?() do
-        body = Jason.encode!(%{"error" => message})
+      body = Jason.encode!(%{"error" => message})
 
-        write_windows_fake(tmp_dir, "tsgolint-error", """
+      OXC.Test.Command.write!(tmp_dir, "tsgolint-error",
+        windows: """
         [Console]::In.ReadToEnd() | Out-Null
         $body = [Convert]::FromBase64String('#{Base.encode64(body)}')
         $stdout = [Console]::OpenStandardOutput()
@@ -426,63 +420,35 @@ defmodule OXC.LintTest do
         $stdout.WriteByte(0)
         $stdout.Write($body, 0, $body.Length)
         exit 1
-        """)
-      else
-        executable = Path.join(tmp_dir, "tsgolint-error")
-
-        File.write!(executable, """
+        """,
+        unix: """
         #!/usr/bin/env python3
         import json, struct, sys
         sys.stdin.read()
         body = json.dumps({"error": #{inspect(message)}}).encode()
         sys.stdout.buffer.write(struct.pack("<IB", len(body), 0) + body)
         sys.exit(1)
-        """)
-
-        File.chmod!(executable, 0o755)
-        executable
-      end
+        """
+      )
     end
 
     defp fake_tsgolint_stderr(tmp_dir, message) do
-      if windows?() do
-        write_windows_fake(tmp_dir, "tsgolint-stderr", """
+      OXC.Test.Command.write!(tmp_dir, "tsgolint-stderr",
+        windows: """
         [Console]::In.ReadToEnd() | Out-Null
         [Console]::Error.Write('#{ps_quote(message)}')
         exit 2
-        """)
-      else
-        executable = Path.join(tmp_dir, "tsgolint-stderr")
-
-        File.write!(executable, """
+        """,
+        unix: """
         #!/usr/bin/env python3
         import sys
         sys.stdin.read()
         sys.stderr.write(#{inspect(message)})
         sys.exit(2)
-        """)
-
-        File.chmod!(executable, 0o755)
-        executable
-      end
-    end
-
-    defp write_windows_fake(tmp_dir, name, script) do
-      script_path = Path.join(tmp_dir, "#{name}.ps1")
-      executable = Path.join(tmp_dir, "#{name}.cmd")
-      File.write!(script_path, script)
-
-      native_script_path = script_path |> String.replace("/", "\\") |> String.replace("%", "%%")
-
-      File.write!(
-        executable,
-        ~s(@powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "#{native_script_path}" %*\r\n)
+        """
       )
-
-      executable
     end
 
-    defp windows?, do: match?({:win32, _name}, :os.type())
     defp ps_quote(value), do: String.replace(value, "'", "''")
 
     defp real_tsgolint do

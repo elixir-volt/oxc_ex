@@ -27,6 +27,13 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v4
 
+      - name: Enable Windows long paths
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          git config --global core.longpaths true
+          echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> "$GITHUB_ENV"
+
       - name: Extract project version
         shell: bash
         run: |

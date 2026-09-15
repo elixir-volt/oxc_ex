@@ -43,6 +43,24 @@ fn allow_warn_deny(severity: RuleSeverity) -> AllowWarnDeny {
     }
 }
 
+fn rule_severity(severity: AllowWarnDeny) -> RuleSeverity {
+    match severity {
+        AllowWarnDeny::Allow => RuleSeverity::Allow,
+        AllowWarnDeny::Warn => RuleSeverity::Warn,
+        AllowWarnDeny::Deny => RuleSeverity::Deny,
+    }
+}
+
+/// Filters apply `all` first, then categories, then single rules, so the most
+/// specific setting wins whatever order the rules arrive in.
+fn filter_rank(filter: &LintFilter) -> u8 {
+    match filter.kind() {
+        LintFilterKind::All => 0,
+        LintFilterKind::Category(_) => 1,
+        LintFilterKind::Generic(_) | LintFilterKind::Rule(_, _) => 2,
+    }
+}
+
 fn global_access(access: GlobalAccess) -> &'static str {
     match access {
         GlobalAccess::Readonly => "readonly",
@@ -119,14 +137,18 @@ fn build_lint_config(
             .map_err(|e| format!("Failed to configure lint globals: {e}"))?
             .with_builtin_plugins(lint_plugins);
 
-    for (rule_name, severity) in rules {
-        let severity = allow_warn_deny(*severity);
-        let filter_kind = LintFilterKind::parse(std::borrow::Cow::Owned(rule_name.clone()))
-            .map_err(|e| format!("Invalid rule filter '{rule_name}': {e}"))?;
-        let filter = LintFilter::new(severity, filter_kind)
-            .map_err(|e| format!("Invalid lint filter '{rule_name}': {e}"))?;
-        builder = builder.with_filters([&filter]);
-    }
+    let mut filters = rules
+        .iter()
+        .map(|(rule_name, severity)| {
+            let kind = LintFilterKind::parse(std::borrow::Cow::Owned(rule_name.clone()))
+                .map_err(|e| format!("Invalid rule filter '{rule_name}': {e}"))?;
+            LintFilter::new(allow_warn_deny(*severity), kind)
+                .map_err(|e| format!("Invalid lint filter '{rule_name}': {e}"))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+
+    filters.sort_by_key(filter_rank);
+    builder = builder.with_filters(&filters);
 
     let config = builder
         .build(&mut external_plugin_store)
@@ -142,6 +164,41 @@ fn build_lint_config(
         config_store: ConfigStore::new(config, Default::default(), external_plugin_store),
         rule_severity_map,
     })
+}
+
+/// The type-aware (tsgolint) rules that `all` and category filters in `rules`
+/// select from `plugins`, with their severities, resolved through oxlint's rule
+/// registry. Without such filters no rules are selected, so callers that name
+/// rules individually run only those.
+fn type_aware_rules_impl(
+    plugins: Vec<String>,
+    rules: Vec<(String, RuleSeverity)>,
+) -> NifResult<Result<Vec<(String, RuleSeverity)>, String>> {
+    let selects_categories = rules.iter().any(|(name, _)| {
+        matches!(
+            LintFilterKind::parse(std::borrow::Cow::Owned(name.clone())),
+            Ok(LintFilterKind::All | LintFilterKind::Category(_))
+        )
+    });
+
+    if !selects_categories {
+        return Ok(Ok(Vec::new()));
+    }
+
+    Ok(build_lint_config(&plugins, &rules, &[], &[]).map(|config| {
+        config
+            .config_store
+            .rules()
+            .iter()
+            .filter(|(rule, _)| rule.is_tsgolint_rule())
+            .map(|(rule, severity)| {
+                (
+                    format!("{}/{}", rule.plugin_name(), rule.name()),
+                    rule_severity(*severity),
+                )
+            })
+            .collect()
+    }))
 }
 
 fn format_rule_enum_name(rule: &oxc_linter::rules::RuleEnum) -> String {

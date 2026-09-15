@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Type-aware linting with `OXC.Lint.run/2` selects the type-aware rules of `all` and category filters, such as `"correctness" => :deny`, from the enabled plugins, instead of passing the category names to tsgolint as rules.
+- Apply `all` first, then categories, then single rules, so a single rule's setting always overrides its category whatever the order of the `:rules` map.
+
 ## 0.18.0 - 2026-09-29
 
 ### Breaking changes

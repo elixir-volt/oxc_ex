@@ -5,6 +5,10 @@ defmodule OXC.Lint.Native.GeneratedStubs do
       def lint(_source_term, _filename, _input) do
         :erlang.nif_error(:nif_not_loaded)
       end
+
+      def type_aware_rules(_plugins, _rules) do
+        :erlang.nif_error(:nif_not_loaded)
+      end
     end
   end
 end

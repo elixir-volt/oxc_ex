@@ -9,3 +9,10 @@ fn lint<'a>(
 ) -> NifResult<Term<'a>> {
     lint_impl(env, source_term, filename, input)
 }
+#[rustler::nif(schedule = "DirtyCpu")]
+fn type_aware_rules(
+    plugins: Vec<String>,
+    rules: Vec<(String, RuleSeverity)>,
+) -> NifResult<Result<Vec<(String, RuleSeverity)>, String>> {
+    type_aware_rules_impl(plugins, rules)
+}

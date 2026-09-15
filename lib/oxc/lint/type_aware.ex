@@ -114,6 +114,7 @@ defmodule OXC.Lint.TypeAware do
   @type option ::
           {:type_aware, true}
           | {:rules, %{String.t() => OXC.Lint.severity() | {OXC.Lint.severity(), term()}}}
+          | {:plugins, [OXC.Lint.plugin()]}
           | {:tsgolint, String.t()}
           | {:type_check, boolean()}
           | {:report_syntactic, boolean()}

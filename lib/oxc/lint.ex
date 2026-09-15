@@ -42,11 +42,16 @@ defmodule OXC.Lint do
         tsgolint: "tsgolint",
         rules: %{"typescript/no-floating-promises" => :deny})
 
+  Categories select type-aware rules too, from the enabled `:plugins`, so
+  `rules: %{"correctness" => :deny}` runs `typescript/no-floating-promises`.
+
   ## Options
 
     * `:rules` — map of rule names to severity (`:deny`, `:warn`, `:allow`).
       Rule names follow oxlint conventions: `"eqeqeq"`, `"react/no-danger"`,
-      `"typescript/no-explicit-any"`, etc.
+      `"typescript/no-explicit-any"`, etc. Categories such as `"correctness"`
+      and `"all"` select every rule in them. `"all"` applies first, then
+      categories, then single rules, so a single rule overrides its category.
 
     * `:plugins` — oxlint plugin names to enable, such as `["react", "jsx-a11y"]`,
       accepting the same names and aliases as an oxlint config file.
@@ -87,7 +92,9 @@ defmodule OXC.Lint do
   @spec run(iodata(), String.t(), [option()]) :: {:ok, [diagnostic()]} | {:error, [diagnostic()]}
   def run(files, opts) when is_list(files) and is_list(opts) do
     if Keyword.get(opts, :type_aware, false) do
-      OXC.Lint.TypeAware.run(files, opts)
+      with {:ok, opts} <- select_type_aware_rules(opts) do
+        OXC.Lint.TypeAware.run(files, opts)
+      end
     else
       {:error,
        OXC.Diagnostic.from_raw(
@@ -120,6 +127,28 @@ defmodule OXC.Lint do
         {:error, OXC.Diagnostic.from_raw(errors, filename, source)}
     end
   end
+
+  # `all` and categories select tsgolint rules from the enabled plugins through
+  # oxlint's rule registry. Rules configured by name keep their options and
+  # override their categories.
+  defp select_type_aware_rules(opts) do
+    rules = Keyword.get(opts, :rules, %{})
+    severities = Enum.map(rules, fn {name, config} -> {name, rule_severity(config)} end)
+
+    case OXC.Lint.Native.type_aware_rules(Keyword.get(opts, :plugins, []), severities) do
+      {:ok, selected} ->
+        named =
+          Map.filter(rules, fn {name, _config} -> String.starts_with?(name, "typescript/") end)
+
+        {:ok, Keyword.put(opts, :rules, Map.merge(Map.new(selected), named))}
+
+      {:error, message} ->
+        {:error, OXC.Diagnostic.from_raw([message], nil, nil)}
+    end
+  end
+
+  defp rule_severity({severity, _options}), do: severity
+  defp rule_severity(severity), do: severity
 
   @doc """
   Like `run/3` but raises on errors.

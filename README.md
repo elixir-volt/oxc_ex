@@ -237,6 +237,10 @@ The `:tsgolint` option can be a native `tsgolint` executable or the npm shim
 from `oxlint-tsgolint`. `type_check: true` also reports TypeScript syntactic and
 semantic diagnostics.
 
+Categories select type-aware rules too. For example, `rules: %{"correctness" => :deny}`
+runs the category's type-aware rules from the enabled `:plugins`, and single rule
+settings override their category.
+
 #### Custom Elixir Rules
 
 Write project-specific lint rules in Elixir using the same AST from `OXC.parse/2`:

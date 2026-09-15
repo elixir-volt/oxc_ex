@@ -1,12 +1,81 @@
 defmodule OXC.LintTest do
   use ExUnit.Case, async: true
 
+  describe "run/2 with type-aware categories" do
+    test "expands categories and preserves diagnostic severity" do
+      {rules, diagnostic} = selected_type_aware_rules(%{"correctness" => :deny})
+      assert "no-floating-promises" in rules
+      refute "correctness" in rules
+      refute "consistent-type-imports" in rules
+      assert diagnostic.severity == :error
+    end
+
+    test "individual settings override categories and categories override all" do
+      {rules, diagnostic} =
+        selected_type_aware_rules(%{
+          "all" => :deny,
+          "correctness" => :allow,
+          "typescript/no-floating-promises" => :warn,
+          "typescript/no-unsafe-assignment" => :allow
+        })
+
+      assert "no-floating-promises" in rules
+      refute "await-thenable" in rules
+      refute "no-unsafe-assignment" in rules
+      assert diagnostic.severity == :warning
+    end
+
+    test "passes rules unknown to oxlint through to tsgolint" do
+      {rules, _diagnostic} =
+        selected_type_aware_rules(%{"correctness" => :deny, "typescript/newer-rule" => :warn})
+
+      assert "newer-rule" in rules
+      assert "no-floating-promises" in rules
+    end
+
+    test "does not select rules from disabled plugins" do
+      {rules, _diagnostic} = selected_type_aware_rules(%{"correctness" => :deny}, ["unicorn"])
+      assert rules == []
+    end
+  end
+
+  defp selected_type_aware_rules(rules, plugins \\ ["typescript"]) do
+    directory =
+      Path.join(System.tmp_dir!(), "oxc-categories-#{System.unique_integer([:positive])}")
+
+    File.mkdir_p!(directory)
+    on_exit(fn -> File.rm_rf!(directory) end)
+    executable = fake_tsgolint(directory)
+    file = Path.join(directory, "app.ts")
+    File.write!(file, "Promise.resolve(1)")
+
+    assert {:ok, [diagnostic]} =
+             OXC.Lint.run([file],
+               type_aware: true,
+               tsgolint: executable,
+               plugins: plugins,
+               rules: rules
+             )
+
+    payload = directory |> Path.join("payload.json") |> File.read!() |> Jason.decode!()
+    {Enum.map(hd(payload["configs"])["rules"], & &1["name"]), diagnostic}
+  end
+
   describe "run/3 with built-in rules" do
     test "detects eqeqeq violation with configured severity" do
       {:ok, diags} = OXC.Lint.run("x == y", "test.js", rules: %{"eqeqeq" => :deny})
       diag = Enum.find(diags, &(&1.rule =~ "eqeqeq"))
       assert diag
       assert diag.severity == :error
+    end
+
+    test "explicit syntax-rule exceptions take precedence over categories" do
+      assert {:ok, diagnostics} =
+               OXC.Lint.run("export const x = 1;", "test.js",
+                 rules: %{"style" => :deny, "eslint/id-length" => :allow}
+               )
+
+      refute Enum.any?(diagnostics, &(&1.rule =~ "id-length"))
     end
 
     test "detects no-debugger" do

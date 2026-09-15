@@ -212,7 +212,7 @@ generate :fmt_native_stubs, "lib/oxc/format/native/generated_stubs.ex" do
 end
 
 lint_source = "native/oxc_lint_nif/src/lib.rs"
-lint_nifs = [lint: []]
+lint_nifs = [lint: [], type_aware_rules: []]
 
 rust :lint_nifs, "native/oxc_lint_nif/src/generated_nifs.rs" do
   Nif.wrappers_from_source(lint_source, lint_nifs, schedule: :dirty_cpu)

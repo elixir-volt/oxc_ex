@@ -415,7 +415,7 @@ defmodule OXC.BundleTest do
     end
 
     test "raises on errors" do
-      assert_raise OXC.Error, ~r/bundle error/, fn ->
+      assert_raise OXC.Error, ~r/Unexpected token/, fn ->
         OXC.bundle!([{"bad.ts", "const = ;"}], entry: "bad.ts")
       end
     end

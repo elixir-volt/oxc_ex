@@ -3,7 +3,7 @@ defmodule OXC.Lint.Rule do
   Behaviour for custom lint rules in Elixir.
 
   Rules receive the parsed ESTree AST (from `OXC.parse/2`) and return
-  diagnostics. Use `OXC.walk/2`, `OXC.collect/2`, or `OXC.postwalk/3`
+  findings located by AST node `start` and `end` offsets. Use `OXC.walk/2`, `OXC.collect/2`, or `OXC.postwalk/3`
   for traversal.
 
   ## Example
@@ -34,7 +34,7 @@ defmodule OXC.Lint.Rule do
               start: start,
               end: stop
             } ->
-              {:keep, %{span: {start, stop}, message: "Unexpected console.log"}}
+              {:keep, %{start: start, end: stop, message: "Unexpected console.log"}}
 
             _ ->
               :skip
@@ -57,12 +57,23 @@ defmodule OXC.Lint.Rule do
           settings: map()
         }
 
+  @typedoc """
+  A finding reported by a rule, located by the byte `start` and `end` offsets of an AST node.
+
+  `OXC.Lint.run/3` turns findings into `t:OXC.Diagnostic.t/0` maps.
+  """
   @type diagnostic :: %{
-          required(:span) => {non_neg_integer(), non_neg_integer()},
+          required(:start) => non_neg_integer(),
+          required(:end) => non_neg_integer(),
           required(:message) => String.t(),
           optional(:help) => String.t() | nil,
-          optional(:labels) => [{non_neg_integer(), non_neg_integer()}],
-          optional(:fix) => String.t() | nil
+          optional(:labels) => [
+            %{
+              required(:start) => non_neg_integer(),
+              required(:end) => non_neg_integer(),
+              optional(:message) => String.t()
+            }
+          ]
         }
 
   @callback meta() :: meta()

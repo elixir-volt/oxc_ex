@@ -3,7 +3,7 @@
   "tool": "reach",
   "findings": [
     {
-      "line": 543,
+      "line": 603,
       "message": "String.to_atom/1 on dynamic input can exhaust the atom table; use explicit mapping or String.to_existing_atom/1",
       "file": "lib/oxc.ex",
       "source": "smells",
@@ -11,12 +11,20 @@
       "fingerprint": "sha256:93f956466d2104ebb0755dd02906db8ea451deaf37b91fe965e0d3d4c60f3b37"
     },
     {
-      "line": 556,
+      "line": 616,
       "message": "String.to_atom/1 on dynamic input can exhaust the atom table; use explicit mapping or String.to_existing_atom/1",
       "file": "lib/oxc.ex",
       "source": "smells",
       "kind": "unsafe_atom_creation",
       "fingerprint": "sha256:93f956466d2104ebb0755dd02906db8ea451deaf37b91fe965e0d3d4c60f3b37"
+    },
+    {
+      "line": 1152,
+      "message": "map shape [:change, :end, :start] appears 3 times; consider a struct or explicit contract if it is domain data",
+      "file": "lib/oxc.ex",
+      "source": "smells",
+      "kind": "fixed_shape_map",
+      "fingerprint": "sha256:34e6d73014047fb025086e018d42ae513968bf452f4dd5e6e894dd9e55020ea2"
     }
   ]
 }

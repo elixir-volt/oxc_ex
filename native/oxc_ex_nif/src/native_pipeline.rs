@@ -7,7 +7,7 @@ use oxc_span::SourceType;
 use rustler::{Encoder, Env, NifResult, Term};
 
 use crate::atoms;
-use crate::error::{error_to_term, format_errors};
+use crate::error::{diagnostics, error_to_term, format_errors};
 use crate::parse::{binary_to_str, parser_options, source_from_term};
 
 struct SpliceVisitor<'a> {
@@ -240,7 +240,7 @@ pub fn codegen_native_impl<'a>(
         .parse();
 
     if !parsed.errors.is_empty() {
-        return error_to_term(env, &format_errors(&parsed.errors));
+        return error_to_term(env, &diagnostics(&parsed.errors));
     }
 
     let mut program = parsed.program;

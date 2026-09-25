@@ -13,7 +13,7 @@ use serde_json::Value;
 use std::path::Path;
 
 use crate::atoms;
-use crate::error::{error_to_term, format_errors};
+use crate::error::{diagnostics, error_to_term, Diagnostic};
 use crate::options::{MinifyInput, TransformInput};
 
 pub(crate) fn parser_options() -> ParseOptions {
@@ -119,7 +119,7 @@ pub fn build_transform_options(
 pub enum TransformOutput {
     Code(String),
     CodeWithMap { code: String, sourcemap: String },
-    Error(Vec<String>),
+    Error(Vec<Diagnostic>),
 }
 
 impl TransformOutput {
@@ -150,7 +150,7 @@ pub fn transform_source(source: &str, filename: &str, opts: &TransformInput) -> 
         .parse();
 
     if !ret.errors.is_empty() {
-        return TransformOutput::Error(format_errors(&ret.errors));
+        return TransformOutput::Error(diagnostics(&ret.errors));
     }
 
     let mut program = ret.program;
@@ -170,7 +170,7 @@ pub fn transform_source(source: &str, filename: &str, opts: &TransformInput) -> 
         Transformer::new(&allocator, path, &options).build_with_scoping(scoping, &mut program);
 
     if !result.errors.is_empty() {
-        return TransformOutput::Error(format_errors(&result.errors));
+        return TransformOutput::Error(diagnostics(&result.errors));
     }
 
     if opts.sourcemap {
@@ -206,7 +206,7 @@ pub fn parse_impl<'a>(env: Env<'a>, source_term: Term<'a>, filename: &str) -> Ni
         .parse();
 
     if !ret.errors.is_empty() {
-        return error_to_term(env, &format_errors(&ret.errors));
+        return error_to_term(env, &diagnostics(&ret.errors));
     }
 
     let json_str = ret.program.to_estree_ts_json(false);
@@ -259,7 +259,7 @@ pub fn minify_impl<'a>(
         .parse();
 
     if !ret.errors.is_empty() {
-        return error_to_term(env, &format_errors(&ret.errors));
+        return error_to_term(env, &diagnostics(&ret.errors));
     }
 
     let mut program = ret.program;

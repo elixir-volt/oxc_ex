@@ -15,15 +15,9 @@ defmodule OXC.Lint do
       {:ok, []} = OXC.Lint.run("export const x = 1;\\n", "test.ts")
   """
 
+  @typedoc "Rule severity in lint options. Findings report `:error` for `:deny` and `:warning` for `:warn`."
   @type severity :: :allow | :warn | :deny
-  @type diagnostic :: %{
-          rule: String.t(),
-          message: String.t(),
-          severity: severity(),
-          span: {non_neg_integer(), non_neg_integer()},
-          labels: [{non_neg_integer(), non_neg_integer()}],
-          help: String.t() | nil
-        }
+  @type diagnostic :: OXC.Diagnostic.t()
 
   @doc """
   Lint source code with oxlint's built-in rules and optional custom rules.
@@ -76,13 +70,18 @@ defmodule OXC.Lint do
         custom_rules: [{MyApp.NoConsoleLog, :warn}]
       )
   """
-  @spec run([String.t()], keyword()) :: {:ok, [diagnostic()]} | {:error, [String.t()]}
-  @spec run(iodata(), String.t(), keyword()) :: {:ok, [diagnostic()]} | {:error, [String.t()]}
+  @spec run([String.t()], keyword()) :: {:ok, [diagnostic()]} | {:error, [diagnostic()]}
+  @spec run(iodata(), String.t(), keyword()) :: {:ok, [diagnostic()]} | {:error, [diagnostic()]}
   def run(files, opts) when is_list(files) and is_list(opts) do
     if Keyword.get(opts, :type_aware, false) do
       OXC.Lint.TypeAware.run(files, opts)
     else
-      {:error, ["OXC.Lint.run/2 with a file list requires type_aware: true"]}
+      {:error,
+       OXC.Diagnostic.from_raw(
+         ["OXC.Lint.run/2 with a file list requires type_aware: true"],
+         nil,
+         nil
+       )}
     end
   end
 
@@ -109,17 +108,12 @@ defmodule OXC.Lint do
     input = %{plugins: plugins, rules: rules, envs: envs, globals: globals, fix: fix}
 
     case OXC.Lint.Native.lint(source, filename, input) do
-      {:ok, builtin_diags} ->
-        custom =
-          case custom_rules do
-            [] -> []
-            rules -> run_custom_rules(rules, source, filename, settings)
-          end
-
-        {:ok, builtin_diags ++ custom}
+      {:ok, builtin} ->
+        custom = run_custom_rules(custom_rules, source, filename, settings)
+        {:ok, OXC.Diagnostic.from_raw(builtin ++ custom, filename, source)}
 
       {:error, errors} ->
-        {:error, errors}
+        {:error, OXC.Diagnostic.from_raw(errors, filename, source)}
     end
   end
 
@@ -128,13 +122,7 @@ defmodule OXC.Lint do
   """
   @spec run!(iodata(), String.t(), keyword()) :: [diagnostic()]
   def run!(source, filename, opts \\ []) do
-    case run(source, filename, opts) do
-      {:ok, diags} ->
-        diags
-
-      {:error, errors} ->
-        raise OXC.Error, message: "OXC lint error: #{inspect(errors)}", errors: errors
-    end
+    source |> run(filename, opts) |> OXC.Error.unwrap!()
   end
 
   defp normalize_envs(envs) when is_list(envs), do: Enum.map(envs, &{to_string(&1), true})
@@ -154,29 +142,35 @@ defmodule OXC.Lint do
   defp severity_to_string(:warn), do: "warn"
   defp severity_to_string(:allow), do: "allow"
 
+  defp run_custom_rules([], _source, _filename, _settings), do: []
+
   defp run_custom_rules(rules, source, filename, settings) do
     case OXC.parse(source, filename) do
       {:ok, ast} ->
         context = %{source: source, filename: filename, settings: settings}
 
-        Enum.flat_map(rules, fn {module, severity} ->
-          meta = module.meta()
-
-          module.run(ast, context)
-          |> Enum.map(fn diag ->
-            %{
-              rule: meta.name,
-              message: diag.message,
-              severity: severity,
-              span: Map.get(diag, :span, {0, 0}),
-              labels: Map.get(diag, :labels, []),
-              help: Map.get(diag, :help)
-            }
-          end)
-        end)
+        for {module, severity} <- rules,
+            severity != :allow,
+            finding <- module.run(ast, context) do
+          custom_finding(finding, module.meta().name, severity)
+        end
 
       {:error, _} ->
         []
     end
   end
+
+  defp custom_finding(finding, rule, severity) do
+    %{
+      rule: rule,
+      message: finding.message,
+      severity: if(severity == :deny, do: :error, else: :warning),
+      help: Map.get(finding, :help),
+      labels: [
+        {finding.start, finding.end, nil} | Enum.map(Map.get(finding, :labels, []), &label/1)
+      ]
+    }
+  end
+
+  defp label(%{start: start, end: stop} = label), do: {start, stop, Map.get(label, :message)}
 end

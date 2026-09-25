@@ -10,7 +10,7 @@ use rustler::{Atom, Encoder, Env, NifResult, Term};
 use rustler_match_spec::{MatchEvent, Selector, ValueRef};
 
 use crate::atoms;
-use crate::error::{error_to_term, format_errors};
+use crate::error::{diagnostics, error_to_term};
 use crate::parse::{binary_to_str, source_from_term};
 
 struct ImportInfo {
@@ -441,7 +441,7 @@ pub fn select_impl<'a>(
     let ret = Parser::new(&allocator, source, source_type).parse();
 
     if !ret.errors.is_empty() {
-        return error_to_term(env, &format_errors(&ret.errors));
+        return error_to_term(env, &diagnostics(&ret.errors));
     }
 
     let mut collector = ImportCollector {

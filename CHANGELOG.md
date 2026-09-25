@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+This release breaks compatibility: errors and lint findings now share one shape.
+
+### Changed
+
+- Return every error and lint finding as an Elixir `Code.diagnostic` map, documented in the new `OXC.Diagnostic` module: `file`, `severity`, `message`, a 1-based `{line, column}` `position` with columns counted in characters, the end of the failing range in `span`, help text in `details`, and optional `rule`, `labels`, `fixes`, and `suggestions`. Errors without a source location use `position: 0` and `span: nil`, as Elixir does. This covers parse, transform, minify, bundle, codegen, import selection, formatting, linting, and type-aware linting.
+- Report lint severities as `:error` and `:warning`. Lint options still take `:deny`, `:warn`, and `:allow`.
+- Replace lint byte `span`s and byte-range `labels` with `position`, `span`, and `labels: [%{position, span, message}]`, keeping each label's message.
+- Remove `OXC.Lint.TypeAware.Diagnostic`; type-aware lint returns the same maps, computing positions from `source_overrides` when given.
+- `OXC.Lint` and `OXC.Format` return diagnostics instead of strings on failure.
+- Custom `OXC.Lint.Rule` findings use AST node `start` and `end` offsets instead of `span: {start, end}`; label entries are `%{start, end, message}` maps. Rules configured with `:allow` no longer run.
+- `OXC.Error` builds its message from its diagnostics as `file:line:column: message`, and every bang function, including `OXC.Lint.run!/3` and `OXC.Format.run!/3`, raises it with `errors: diagnostics`.
+
+### Fixed
+
+- Return lint fixes when `fix: true` is set. They were computed but dropped; they are now `OXC.patch_string/2` patches in `fixes`.
+
 ## 0.17.8 - 2026-07-20
 
 ### Added

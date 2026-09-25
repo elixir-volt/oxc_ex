@@ -20,8 +20,14 @@ defmodule OXC.Codegen.LintTypes do
           required(:rule) => String.t(),
           required(:message) => String.t(),
           required(:severity) => R.path(:Atom),
-          required(:span) => {R.u32(), R.u32()},
-          required(:labels) => [{R.u32(), R.u32()}],
+          required(:labels) => [{R.u32(), R.u32(), String.t() | nil}],
+          required(:help) => String.t() | nil,
+          required(:fixes) => [{R.u32(), R.u32(), String.t()}]
+        }
+
+  @type parse_error :: %{
+          required(:message) => String.t(),
+          required(:labels) => [{R.u32(), R.u32(), String.t() | nil}],
           required(:help) => String.t() | nil
         }
 end

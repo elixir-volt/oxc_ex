@@ -9,7 +9,15 @@ use oxc_formatter::{
 };
 use oxc_parser::Parser;
 use oxc_span::SourceType;
-use rustler::{Binary, Encoder, Env, Error, NifResult, Term};
+use rustler::{Binary, Encoder, Env, Error, NifMap, NifResult, Term};
+
+/// A raw parse error: message, help, and byte-range labels with the primary label first.
+#[derive(NifMap)]
+struct ParseError {
+    message: String,
+    help: Option<String>,
+    labels: Vec<(usize, usize, Option<String>)>,
+}
 
 include!("generated_atoms.rs");
 include!("generated_option_helpers.rs");
@@ -242,7 +250,30 @@ fn format_impl<'a>(
         .parse();
 
     if !ret.errors.is_empty() {
-        let errors: Vec<String> = ret.errors.iter().map(|e| e.message.to_string()).collect();
+        let errors: Vec<ParseError> = ret
+            .errors
+            .iter()
+            .map(|error| {
+                let mut labels = error.labels.clone().unwrap_or_default();
+                labels.sort_by_key(|label| !label.primary());
+
+                ParseError {
+                    message: error.message.to_string(),
+                    help: error.help.as_ref().map(ToString::to_string),
+                    labels: labels
+                        .iter()
+                        .map(|label| {
+                            let start = label.offset();
+                            (
+                                start,
+                                start + label.len(),
+                                label.label().map(str::to_string),
+                            )
+                        })
+                        .collect(),
+                }
+            })
+            .collect();
         return Ok((atoms::error(), errors).encode(env));
     }
 

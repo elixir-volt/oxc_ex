@@ -6,14 +6,23 @@ defmodule OXC.LintTest do
       {:ok, diags} = OXC.Lint.run("x == y", "test.js", rules: %{"eqeqeq" => :deny})
       diag = Enum.find(diags, &(&1.rule =~ "eqeqeq"))
       assert diag
-      assert diag.severity == :deny
+      assert diag.severity == :error
     end
 
     test "detects no-debugger" do
       {:ok, diags} = OXC.Lint.run("debugger;", "test.js", rules: %{"no-debugger" => :deny})
       diag = Enum.find(diags, &(&1.rule =~ "no-debugger"))
       assert diag
-      assert diag.severity == :deny
+      assert diag.severity == :error
+    end
+
+    test "returns fixes when requested" do
+      {:ok, diags} =
+        OXC.Lint.run("debugger;\n", "test.js", rules: %{"no-debugger" => :deny}, fix: true)
+
+      diag = Enum.find(diags, &(&1.rule =~ "no-debugger"))
+      assert diag.fixes == [%{start: 0, end: 9, change: ""}]
+      assert OXC.patch_string("debugger;\n", diag.fixes) == "\n"
     end
 
     test "accepts iodata source" do
@@ -50,35 +59,44 @@ defmodule OXC.LintTest do
       refute Enum.any?(diags, &(&1.message =~ "knownGlobal"))
     end
 
-    test "diagnostic has expected shape" do
+    test "findings are Code.diagnostic maps with a rule" do
       {:ok, [diag | _]} = OXC.Lint.run("x == y", "test.js", rules: %{"eqeqeq" => :warn})
+
+      assert %{
+               file: "test.js",
+               severity: :warning,
+               position: {1, _},
+               span: {1, _},
+               source: nil,
+               stacktrace: []
+             } = diag
+
       assert is_binary(diag.rule)
       assert is_binary(diag.message)
-      assert diag.severity in [:warn, :deny, :allow]
-      {start, stop} = diag.span
-      assert is_integer(start) and is_integer(stop)
-      assert is_list(diag.labels)
     end
 
-    test "span points to correct location" do
+    test "position points to the reported line and column" do
       source = "const a = 1;\nx == y;\n"
       {:ok, diags} = OXC.Lint.run(source, "test.js", rules: %{"eqeqeq" => :warn})
       diag = Enum.find(diags, &(&1.rule =~ "eqeqeq"))
-      assert diag
-      {start, _stop} = diag.span
-      assert start >= 13
+      assert {2, column} = diag.position
+      assert column in 1..7
     end
 
     test "returns parse errors for invalid syntax" do
-      {:error, errors} = OXC.Lint.run("const = ;", "bad.js")
-      assert is_list(errors)
-      assert length(errors) > 0
+      assert {:error, [error]} = OXC.Lint.run("const = ;", "bad.js")
+      assert %{file: "bad.js", position: {1, 7}, message: "Unexpected token"} = error
     end
 
-    test "warn severity is default for correctness rules" do
+    test "run! raises with file, line, and column" do
+      error = assert_raise OXC.Error, fn -> OXC.Lint.run!("const = ;", "bad.js") end
+      assert Exception.message(error) == "bad.js:1:7: Unexpected token"
+    end
+
+    test "reports :warn rules as warnings" do
       {:ok, diags} = OXC.Lint.run("x == y", "test.js", rules: %{"eqeqeq" => :warn})
       diag = Enum.find(diags, &(&1.rule =~ "eqeqeq"))
-      assert diag.severity == :warn
+      assert diag.severity == :warning
     end
   end
 
@@ -115,7 +133,7 @@ defmodule OXC.LintTest do
 
   describe "run/2 with type-aware rules" do
     test "requires a tsgolint executable" do
-      assert {:error, [message]} =
+      assert {:error, [%{message: message}]} =
                OXC.Lint.run(["test.ts"],
                  type_aware: true,
                  tsgolint: "/definitely/missing/tsgolint"
@@ -139,13 +157,11 @@ defmodule OXC.LintTest do
       assert {:ok, [diag]} =
                OXC.Lint.TypeAware.parse_output(frame, %{"no-floating-promises" => :deny})
 
-      assert %OXC.Lint.TypeAware.Diagnostic{} = diag
       assert diag.rule == "typescript/no-floating-promises"
       assert diag.message == "Promise is not handled"
-      assert diag.severity == :deny
+      assert diag.severity == :error
       assert diag.file == "/tmp/app.ts"
-      assert diag.span == {4, 12}
-      assert diag.labels == [{4, 12}]
+      assert diag.labels == [{4, 12, nil}, {4, 12, "promise"}]
     end
 
     test "runs tsgolint headless with encoded payload and normalizes diagnostics" do
@@ -162,7 +178,7 @@ defmodule OXC.LintTest do
       file = Path.join(tmp_dir, "app.ts")
       File.write!(file, "async function save() {}\nsave()\n")
 
-      assert {:ok, [%OXC.Lint.TypeAware.Diagnostic{} = diag]} =
+      assert {:ok, [diag]} =
                OXC.Lint.run([file],
                  type_aware: true,
                  tsgolint: executable,
@@ -176,9 +192,12 @@ defmodule OXC.LintTest do
                )
 
       assert diag.rule == "typescript/no-floating-promises"
-      assert diag.severity == :deny
+      assert diag.severity == :error
       assert Path.expand(diag.file) == Path.expand(file)
-      assert diag.span == {1, 5}
+      # Positions come from the override tsgolint checked, not the file on disk.
+      assert diag.position == {1, 2}
+      assert diag.span == {1, 6}
+      assert diag.labels == [%{position: {1, 2}, span: {1, 6}, message: "promise"}]
 
       payload = tmp_dir |> Path.join("payload.json") |> File.read!() |> Jason.decode!()
       argv = tmp_dir |> Path.join("argv.json") |> File.read!() |> Jason.decode!()
@@ -205,9 +224,9 @@ defmodule OXC.LintTest do
                })
 
       assert first_diag.rule == "typescript/no-floating-promises"
-      assert first_diag.severity == :deny
+      assert first_diag.severity == :error
       assert second_diag.rule == "typescript/no-misused-promises"
-      assert second_diag.severity == :warn
+      assert second_diag.severity == :warning
     end
 
     test "returns diagnostics from a nonzero tsgolint exit" do
@@ -232,7 +251,7 @@ defmodule OXC.LintTest do
                )
 
       assert diag.rule == "typescript/no-floating-promises"
-      assert diag.severity == :deny
+      assert diag.severity == :error
     end
 
     test "returns errors from a nonzero tsgolint error-only exit" do
@@ -247,7 +266,7 @@ defmodule OXC.LintTest do
 
       executable = fake_tsgolint_error(tmp_dir, "tsgolint exploded")
 
-      assert {:error, ["tsgolint exploded"]} =
+      assert {:error, [%{message: "tsgolint exploded"}]} =
                OXC.Lint.run([Path.join(tmp_dir, "app.ts")],
                  type_aware: true,
                  tsgolint: executable,
@@ -267,7 +286,7 @@ defmodule OXC.LintTest do
 
       executable = fake_tsgolint_stderr(tmp_dir, "panic: Unknown script kind")
 
-      assert {:error, [message]} =
+      assert {:error, [%{message: message}]} =
                OXC.Lint.run([Path.join(tmp_dir, "App.vue")],
                  type_aware: true,
                  tsgolint: executable,
@@ -506,7 +525,7 @@ defmodule OXC.LintTest do
             start: start,
             end: stop
           } ->
-            {:keep, %{span: {start, stop}, message: "Unexpected console.log"}}
+            {:keep, %{start: start, end: stop, message: "Unexpected console.log"}}
 
           _ ->
             :skip
@@ -534,7 +553,7 @@ defmodule OXC.LintTest do
         OXC.collect(ast, fn
           %{type: :import_declaration, source: %{value: specifier, start: s, end: e}} ->
             if specifier in @banned do
-              {:keep, %{span: {s, e}, message: "Import '#{specifier}' is banned"}}
+              {:keep, %{start: s, end: e, message: "Import '#{specifier}' is banned"}}
             else
               :skip
             end
@@ -549,8 +568,18 @@ defmodule OXC.LintTest do
       {:ok, diags} =
         OXC.Lint.run("console.log('hi')", "test.js", custom_rules: [{NoConsoleLog, :warn}])
 
-      assert Enum.any?(diags, &(&1.rule == "custom/no-console-log"))
-      assert Enum.any?(diags, &(&1.message == "Unexpected console.log"))
+      assert [diag] = Enum.filter(diags, &(&1.rule == "custom/no-console-log"))
+      assert diag.message == "Unexpected console.log"
+      assert diag.severity == :warning
+      assert diag.position == {1, 1}
+      assert diag.span == {1, 18}
+    end
+
+    test "custom rules with :allow severity do not run" do
+      {:ok, diags} =
+        OXC.Lint.run("console.log('hi')", "test.js", custom_rules: [{NoConsoleLog, :allow}])
+
+      refute Enum.any?(diags, &(&1.rule == "custom/no-console-log"))
     end
 
     test "custom rule detects banned imports" do
@@ -565,7 +594,7 @@ defmodule OXC.LintTest do
       banned = Enum.filter(diags, &(&1.rule == "custom/no-banned-imports"))
       assert length(banned) == 1
       assert hd(banned).message =~ "lodash"
-      assert hd(banned).severity == :deny
+      assert hd(banned).severity == :error
     end
 
     test "custom rule receives settings" do
@@ -578,7 +607,7 @@ defmodule OXC.LintTest do
         @impl true
         def run(_ast, context) do
           if context.settings[:flag] do
-            [%{span: {0, 0}, message: "flag is set"}]
+            [%{start: 0, end: 0, message: "flag is set"}]
           else
             []
           end

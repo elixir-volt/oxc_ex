@@ -107,7 +107,7 @@ defmodule OXC.Format do
       true
   """
   @spec run(iodata(), String.t(), [option()]) ::
-          {:ok, String.t()} | {:error, [String.t()]}
+          {:ok, String.t()} | {:error, [OXC.Diagnostic.t()]}
   def run(source, filename, opts \\ []) do
     opts_map =
       opts
@@ -142,7 +142,10 @@ defmodule OXC.Format do
           {k, v}
       end)
 
-    OXC.Format.Native.format(source, filename, opts_map)
+    case OXC.Format.Native.format(source, filename, opts_map) do
+      {:ok, formatted} -> {:ok, formatted}
+      {:error, errors} -> {:error, OXC.Diagnostic.from_raw(errors, filename, source)}
+    end
   end
 
   @doc """
@@ -155,12 +158,6 @@ defmodule OXC.Format do
   """
   @spec run!(iodata(), String.t(), [option()]) :: String.t()
   def run!(source, filename, opts \\ []) do
-    case run(source, filename, opts) do
-      {:ok, code} ->
-        code
-
-      {:error, errors} ->
-        raise OXC.Error, message: "OXC format error: #{inspect(errors)}", errors: errors
-    end
+    source |> run(filename, opts) |> OXC.Error.unwrap!()
   end
 end

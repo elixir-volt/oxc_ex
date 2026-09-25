@@ -2,6 +2,8 @@ use std::path::Path;
 use std::sync::Arc;
 
 use oxc_allocator::Allocator;
+use oxc_diagnostics::OxcDiagnostic;
+use oxc_linter::PossibleFixes;
 use oxc_linter::{
     AllowWarnDeny, ConfigStore, ConfigStoreBuilder, ExternalPluginStore, FixKind, LintFilter,
     LintFilterKind, LintOptions, LintPlugins, Linter, ModuleRecord,
@@ -39,12 +41,42 @@ fn parse_plugins(plugin_strs: &[String]) -> LintPlugins {
     plugins
 }
 
-fn severity_atom(_env: Env<'_>, severity: AllowWarnDeny) -> rustler::Atom {
+fn severity_atom(severity: AllowWarnDeny) -> rustler::Atom {
     match severity {
-        AllowWarnDeny::Allow => atoms::allow(),
-        AllowWarnDeny::Warn => atoms::warn(),
-        AllowWarnDeny::Deny => atoms::deny(),
+        AllowWarnDeny::Deny => atoms::error(),
+        AllowWarnDeny::Allow | AllowWarnDeny::Warn => atoms::warning(),
     }
+}
+
+/// Byte-range labels with the primary label first.
+fn labels(error: &OxcDiagnostic) -> Vec<(u32, u32, Option<String>)> {
+    let mut labels = error.labels.clone().unwrap_or_default();
+    labels.sort_by_key(|label| !label.primary());
+
+    labels
+        .iter()
+        .map(|label| {
+            let start = label.offset() as u32;
+            (
+                start,
+                start + label.len() as u32,
+                label.label().map(str::to_string),
+            )
+        })
+        .collect()
+}
+
+fn fixes(fixes: &PossibleFixes) -> Vec<(u32, u32, String)> {
+    let fixes = match fixes {
+        PossibleFixes::None => &[][..],
+        PossibleFixes::Single(fix) => std::slice::from_ref(fix),
+        PossibleFixes::Multiple(fixes) => fixes.as_slice(),
+    };
+
+    fixes
+        .iter()
+        .map(|fix| (fix.span.start, fix.span.end, fix.content.to_string()))
+        .collect()
 }
 
 fn parse_severity(s: &str) -> AllowWarnDeny {
@@ -168,8 +200,16 @@ fn lint_impl<'a>(
         .parse();
 
     if !ret.errors.is_empty() {
-        let error_msgs: Vec<String> = ret.errors.iter().map(|e| e.message.to_string()).collect();
-        return Ok((atoms::error(), error_msgs).encode(env));
+        let errors: Vec<ParseError> = ret
+            .errors
+            .iter()
+            .map(|error| ParseError {
+                message: error.message.to_string(),
+                labels: labels(error),
+                help: error.help.as_ref().map(|h| h.to_string()),
+            })
+            .collect();
+        return Ok((atoms::error(), errors).encode(env));
     }
 
     let lint_config =
@@ -215,20 +255,13 @@ fn lint_impl<'a>(
             Diagnostic {
                 rule: full_rule,
                 message: msg.error.message.to_string(),
-                severity: severity_atom(env, severity),
-                span: (msg.span.start, msg.span.end),
-                labels: msg
-                    .error
-                    .labels
-                    .as_ref()
-                    .map(|labels| {
-                        labels
-                            .iter()
-                            .map(|l| (l.offset() as u32, (l.offset() + l.len()) as u32))
-                            .collect()
-                    })
-                    .unwrap_or_default(),
+                severity: severity_atom(severity),
+                labels: match labels(&msg.error) {
+                    labels if labels.is_empty() => vec![(msg.span.start, msg.span.end, None)],
+                    labels => labels,
+                },
                 help: msg.error.help.as_ref().map(|h| h.to_string()),
+                fixes: fixes(&msg.fixes),
             }
         })
         .collect();

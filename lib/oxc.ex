@@ -22,15 +22,33 @@ defmodule OXC do
   alias OXC.NativeProgram
 
   defmodule Error do
-    defexception [:message, :errors]
+    @moduledoc """
+    Raised by bang functions. `errors` holds `t:OXC.Diagnostic.t/0` maps and the
+    message lists them as `file:line:column: message`.
+    """
+    defexception [:message, errors: []]
 
     @impl true
-    def message(%{message: message}), do: message
+    def exception(opts) do
+      errors = Keyword.get(opts, :errors, [])
+
+      message =
+        Keyword.get_lazy(opts, :message, fn ->
+          Enum.map_join(errors, "\n", &OXC.Diagnostic.format/1)
+        end)
+
+      %__MODULE__{message: message, errors: errors}
+    end
+
+    @doc "Return the value of `{:ok, value}` or raise for `{:error, errors}`."
+    @spec unwrap!({:ok, value} | {:error, [OXC.Diagnostic.t()]}) :: value when value: term()
+    def unwrap!({:ok, value}), do: value
+    def unwrap!({:error, errors}), do: raise(__MODULE__, errors: errors)
   end
 
   @type source :: iodata()
   @type ast :: %{required(:type) => atom(), optional(atom()) => any()}
-  @type error :: %{message: String.t()}
+  @type error :: OXC.Diagnostic.t()
   @type code_with_sourcemap :: %{code: String.t(), sourcemap: String.t()}
   @type parse_result :: {:ok, ast()} | {:error, [error()]}
   @type native_parse_result :: {:ok, NativeProgram.t()} | {:error, [error()]}
@@ -47,7 +65,7 @@ defmodule OXC do
   - `.tsx` — TypeScript with JSX
 
   Returns `{:ok, ast}` where `ast` is a map with atom keys, or
-  `{:error, errors}` with a list of parse error maps.
+  `{:error, errors}` with a list of `t:error/0` diagnostics.
 
   Passing `:native` as the third argument returns a native program for pipe-friendly
   `parse` → `splice` → `codegen` workflows that do not need to inspect the ESTree in Elixir.
@@ -68,7 +86,7 @@ defmodule OXC do
   def parse(source, filename) do
     case OXC.Native.parse(source, filename) do
       {:ok, ast} -> {:ok, atomize_term_keys(ast)}
-      {:error, errors} -> {:error, atomize_term_keys(errors)}
+      {:error, errors} -> {:error, OXC.Diagnostic.from_raw(errors, filename, source)}
     end
   end
 
@@ -104,7 +122,7 @@ defmodule OXC do
   defp unwrap_parse!({:ok, ast}), do: ast
 
   defp unwrap_parse!({:error, errors}) do
-    raise Error, message: "OXC parse error: #{inspect(errors)}", errors: errors
+    raise Error, errors: errors
   end
 
   @doc """
@@ -155,7 +173,7 @@ defmodule OXC do
   def transform(source, filename, opts \\ []) do
     case OXC.Native.transform(source, filename, normalize_transform_options(opts)) do
       {:ok, result} -> {:ok, normalize_native_result(result)}
-      {:error, errors} -> {:error, atomize_term_keys(errors)}
+      {:error, errors} -> {:error, OXC.Diagnostic.from_raw(errors, filename, source)}
     end
   end
 
@@ -174,7 +192,7 @@ defmodule OXC do
         code
 
       {:error, errors} ->
-        raise Error, message: "OXC transform error: #{inspect(errors)}", errors: errors
+        raise Error, errors: errors
     end
   end
 
@@ -201,10 +219,14 @@ defmodule OXC do
   def transform_many(inputs, opts \\ []) do
     native_opts = normalize_transform_options(opts)
 
-    OXC.Native.transform_many(inputs, native_opts)
-    |> Enum.map(fn
-      {:ok, result} -> {:ok, normalize_native_result(result)}
-      {:error, errors} -> {:error, atomize_term_keys(errors)}
+    inputs
+    |> OXC.Native.transform_many(native_opts)
+    |> Enum.zip_with(inputs, fn
+      {:ok, result}, _input ->
+        {:ok, normalize_native_result(result)}
+
+      {:error, errors}, {source, filename} ->
+        {:error, OXC.Diagnostic.from_raw(errors, filename, source)}
     end)
   end
 
@@ -230,7 +252,7 @@ defmodule OXC do
   def minify(source, filename, opts \\ []) do
     case OXC.Native.minify(source, filename, normalize_minify_options(opts)) do
       {:ok, code} -> {:ok, code}
-      {:error, errors} -> {:error, atomize_term_keys(errors)}
+      {:error, errors} -> {:error, OXC.Diagnostic.from_raw(errors, filename, source)}
     end
   end
 
@@ -250,7 +272,7 @@ defmodule OXC do
         code
 
       {:error, errors} ->
-        raise Error, message: "OXC minify error: #{inspect(errors)}", errors: errors
+        raise Error, errors: errors
     end
   end
 
@@ -278,7 +300,7 @@ defmodule OXC do
   def select(source, filename, selector) when is_atom(selector) do
     case OXC.Native.select(source, filename, selector_spec(selector)) do
       {:ok, results} -> {:ok, results}
-      {:error, errors} -> {:error, atomize_term_keys(errors)}
+      {:error, errors} -> {:error, OXC.Diagnostic.from_raw(errors, filename, source)}
     end
   end
 
@@ -409,7 +431,7 @@ defmodule OXC do
         result
 
       {:error, errors} ->
-        raise Error, message: "OXC rewrite_specifiers error: #{inspect(errors)}", errors: errors
+        raise Error, errors: errors
     end
   end
 
@@ -476,17 +498,22 @@ defmodule OXC do
   def bundle(entry, opts) when is_binary(entry) do
     case OXC.Native.bundle_entry(entry, normalize_bundle_options(opts)) do
       {:ok, result} -> {:ok, normalize_native_result(result)}
-      {:error, errors} -> {:error, atomize_term_keys(errors)}
+      {:error, errors} -> {:error, OXC.Diagnostic.from_raw(errors, nil, nil)}
     end
   end
 
   def bundle(files, opts) when is_list(files) do
     if Keyword.get(opts, :entry, "") == "" do
-      {:error, [%{message: "bundle/2 requires :entry, for example: entry: \"main.ts\""}]}
+      {:error,
+       OXC.Diagnostic.from_raw(
+         ["bundle/2 requires :entry, for example: entry: \"main.ts\""],
+         nil,
+         nil
+       )}
     else
       case OXC.Native.bundle(files, normalize_bundle_options(opts)) do
         {:ok, result} -> {:ok, normalize_native_result(result)}
-        {:error, errors} -> {:error, atomize_term_keys(errors)}
+        {:error, errors} -> {:error, OXC.Diagnostic.from_raw(errors, nil, nil)}
       end
     end
   end
@@ -502,7 +529,7 @@ defmodule OXC do
         result
 
       {:error, errors} ->
-        raise Error, message: "OXC bundle error: #{inspect(errors)}", errors: errors
+        raise Error, errors: errors
     end
   end
 
@@ -624,14 +651,14 @@ defmodule OXC do
   def codegen(%NativeProgram{source: source, filename: filename, splices: splices}) do
     case OXC.Native.codegen_native(source, filename, splices) do
       {:ok, code} -> {:ok, code}
-      {:error, errors} -> {:error, atomize_term_keys(errors)}
+      {:error, errors} -> {:error, OXC.Diagnostic.from_raw(errors, filename, source)}
     end
   end
 
   def codegen(ast) do
     case OXC.Native.codegen(deatomize_ast(ast)) do
       {:ok, code} -> {:ok, code}
-      {:error, errors} -> {:error, atomize_term_keys(errors)}
+      {:error, errors} -> {:error, OXC.Diagnostic.from_raw(errors, nil, nil)}
     end
   end
 
@@ -645,7 +672,7 @@ defmodule OXC do
         code
 
       {:error, errors} ->
-        raise Error, message: "OXC codegen error: #{inspect(errors)}", errors: errors
+        raise Error, errors: errors
     end
   end
 

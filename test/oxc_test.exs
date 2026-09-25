@@ -67,6 +67,32 @@ defmodule OXCTest do
       assert is_binary(msg)
     end
 
+    test "returns errors as Code.diagnostic maps with positions" do
+      {:error, [error]} = OXC.parse("const a = 1;\nconst x = ;", "bad.js")
+
+      assert %{
+               message: "Unexpected token",
+               severity: :error,
+               file: "bad.js",
+               position: {2, 11},
+               span: {2, 12},
+               source: nil,
+               stacktrace: []
+             } = error
+    end
+
+    test "counts diagnostic columns in characters" do
+      {:error, [error]} = OXC.parse("const s = 'ёж'; const x = ;", "bad.js")
+
+      assert error.position == {1, 27}
+    end
+
+    test "parse! raises with file, line, and column" do
+      error = assert_raise OXC.Error, fn -> OXC.parse!("const x = ;", "bad.js") end
+
+      assert Exception.message(error) == "bad.js:1:11: Unexpected token"
+    end
+
     test "returns atom keys" do
       {:ok, ast} = OXC.parse("const x = 1", "test.js")
       assert Map.has_key?(ast, :type)
@@ -116,7 +142,7 @@ defmodule OXCTest do
     end
 
     test "raises OXC.Error on parse error" do
-      assert_raise OXC.Error, ~r/parse error/, fn ->
+      assert_raise OXC.Error, ~r/^bad\.js:1:7: Unexpected token/, fn ->
         OXC.parse!("const = ;", "bad.js")
       end
     end
@@ -277,6 +303,12 @@ defmodule OXCTest do
       assert %{message: _} = hd(errors)
     end
 
+    test "returns transform errors with file and position" do
+      {:error, [error | _]} = OXC.transform("let a;\nconst = ;", "bad.ts")
+
+      assert %{file: "bad.ts", position: {2, _column}, severity: :error} = error
+    end
+
     test "handles enum transformation" do
       {:ok, js} = OXC.transform("enum Color { Red, Green, Blue }", "test.ts")
       refute js =~ "enum"
@@ -322,7 +354,7 @@ defmodule OXCTest do
     end
 
     test "raises OXC.Error on error" do
-      assert_raise OXC.Error, ~r/transform error/, fn ->
+      assert_raise OXC.Error, ~r/^bad\.ts:1:7: Unexpected token/, fn ->
         OXC.transform!("const = ;", "bad.ts")
       end
     end
@@ -392,7 +424,7 @@ defmodule OXCTest do
     end
 
     test "raises OXC.Error on error" do
-      assert_raise OXC.Error, ~r/minify error/, fn ->
+      assert_raise OXC.Error, ~r/^bad\.js:1:7: Unexpected token/, fn ->
         OXC.minify!("const = ;", "bad.js")
       end
     end

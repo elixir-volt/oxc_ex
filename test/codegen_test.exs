@@ -205,7 +205,7 @@ defmodule OXC.CodegenTest do
     end
 
     test "raises on error" do
-      assert_raise OXC.Error, ~r/codegen error/, fn ->
+      assert_raise OXC.Error, ~r/Unsupported statement: invalid_type/, fn ->
         OXC.codegen!(%{type: :program, body: [%{type: :invalid_type}]})
       end
     end

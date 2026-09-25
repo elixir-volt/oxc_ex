@@ -204,7 +204,8 @@ Lint JavaScript/TypeScript with oxlint's 650+ built-in rules:
 ```elixir
 {:ok, diags} = OXC.Lint.run("x == y", "test.js",
   rules: %{"eqeqeq" => :deny})
-# [%{rule: "eqeqeq", message: "Require the use of === and !==", severity: :deny, ...}]
+# [%{rule: "eslint(eqeqeq)", message: "Expected === and instead saw ==",
+#    severity: :error, file: "test.js", position: {1, 3}, span: {1, 5}, ...}]
 
 {:ok, []} = OXC.Lint.run("export const x = 1;\n", "test.ts")
 ```
@@ -261,7 +262,7 @@ defmodule MyApp.NoConsoleLog do
                   object: %{type: :identifier, name: "console"},
                   property: %{type: :identifier, name: "log"}},
         start: start, end: stop} ->
-        {:keep, %{span: {start, stop}, message: "Unexpected console.log"}}
+        {:keep, %{start: start, end: stop, message: "Unexpected console.log"}}
       _ -> :skip
     end)
   end
@@ -446,11 +447,28 @@ js = OXC.codegen!(ast)
 
 ### Error Handling
 
-All functions return `{:ok, result}` or `{:error, errors}` where errors are
-maps with a `:message` key:
+All functions return `{:ok, result}` or `{:error, errors}`. Errors and lint
+findings are Elixir `Code.diagnostic` maps (see `OXC.Diagnostic`) with the file,
+a 1-based `{line, column}` position, and where the problem ends:
 
 ```elixir
-{:error, [%{message: "Expected a semicolon or ..."}]} = OXC.parse("const = ;", "bad.js")
+{:error, [%{message: "Unexpected token", file: "bad.js", position: {1, 7}, span: {1, 8}}]} =
+  OXC.parse("const = ;", "bad.js")
+```
+
+Bang variants raise `OXC.Error` with compiler-style messages:
+
+```elixir
+OXC.parse!("const = ;", "bad.js")
+** (OXC.Error) bad.js:1:7: Unexpected token
+```
+
+Lint fixes (`fix: true`) are `OXC.patch_string/2` patches:
+
+```elixir
+{:ok, [diag]} = OXC.Lint.run("debugger;", "app.js", rules: %{"no-debugger" => :deny}, fix: true)
+OXC.patch_string("debugger;", diag.fixes)
+#=> ""
 ```
 
 ## How It Works

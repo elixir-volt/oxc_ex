@@ -5,9 +5,9 @@ pub struct Diagnostic {
     pub rule: String,
     pub message: String,
     pub severity: Atom,
-    pub span: (u32, u32),
-    pub labels: Vec<(u32, u32)>,
+    pub labels: Vec<(u32, u32, Option<String>)>,
     pub help: Option<String>,
+    pub fixes: Vec<(u32, u32, String)>,
 }
 #[derive(Clone, Debug, rustler::NifMap)]
 pub struct LintInput {
@@ -16,4 +16,10 @@ pub struct LintInput {
     pub envs: Vec<(String, bool)>,
     pub globals: Vec<(String, String)>,
     pub fix: bool,
+}
+#[derive(Clone, Debug, rustler::NifMap)]
+pub struct ParseError {
+    pub message: String,
+    pub labels: Vec<(u32, u32, Option<String>)>,
+    pub help: Option<String>,
 }

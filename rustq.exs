@@ -108,7 +108,7 @@ rust "native/oxc_ex_nif/src/generated_atoms.rs" do
 end
 
 rust "native/oxc_lint_nif/src/generated_atoms.rs" do
-  Atom.declaration([:ok, :error, :warning])
+  Atom.declaration([:ok, :error])
 end
 
 rust "native/oxc_lint_nif/src/generated_types.rs" do

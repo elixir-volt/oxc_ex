@@ -4,17 +4,28 @@
 pub struct Diagnostic {
     pub rule: String,
     pub message: String,
-    pub severity: Atom,
+    pub severity: FindingSeverity,
     pub labels: Vec<(u32, u32, Option<String>)>,
     pub help: Option<String>,
     pub fixes: Vec<(u32, u32, String)>,
 }
+#[derive(Clone, Copy, Debug, Eq, PartialEq, rustler::NifUnitEnum)]
+pub enum FindingSeverity {
+    Error,
+    Warning,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq, rustler::NifUnitEnum)]
+pub enum GlobalAccess {
+    Readonly,
+    Writable,
+    Off,
+}
 #[derive(Clone, Debug, rustler::NifMap)]
 pub struct LintInput {
-    pub plugins: Vec<String>,
-    pub rules: Vec<(String, String)>,
-    pub envs: Vec<(String, bool)>,
-    pub globals: Vec<(String, String)>,
+    pub plugins: Vec<Plugin>,
+    pub rules: Vec<(String, RuleSeverity)>,
+    pub envs: Vec<String>,
+    pub globals: Vec<(String, GlobalAccess)>,
     pub fix: bool,
 }
 #[derive(Clone, Debug, rustler::NifMap)]
@@ -22,4 +33,27 @@ pub struct ParseError {
     pub message: String,
     pub labels: Vec<(u32, u32, Option<String>)>,
     pub help: Option<String>,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq, rustler::NifUnitEnum)]
+pub enum Plugin {
+    React,
+    Unicorn,
+    Typescript,
+    Oxc,
+    Import,
+    Jsdoc,
+    Jest,
+    Vitest,
+    JsxA11y,
+    Nextjs,
+    ReactPerf,
+    Promise,
+    Node,
+    Vue,
+}
+#[derive(Clone, Copy, Debug, Eq, PartialEq, rustler::NifUnitEnum)]
+pub enum RuleSeverity {
+    Allow,
+    Warn,
+    Deny,
 }

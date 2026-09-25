@@ -83,7 +83,8 @@ defmodule OXC.MixProject do
       {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.2", only: [:dev, :test], runtime: false},
       {:reach, "~> 2.5", only: [:dev, :test], runtime: false},
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
+      {:json_codec, "~> 0.2"}
     ]
   end
 end

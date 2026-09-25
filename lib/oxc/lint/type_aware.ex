@@ -26,11 +26,113 @@ defmodule OXC.Lint.TypeAware do
     defstruct name: nil, options: nil
   end
 
+  defmodule Range do
+    @moduledoc "tsgolint byte range."
+    use JSONCodec, strict: true, fast_path: :json
+
+    defstruct [:pos, :end]
+    @type t :: %__MODULE__{pos: non_neg_integer(), end: non_neg_integer()}
+  end
+
+  defmodule RuleMessage do
+    @moduledoc "tsgolint diagnostic message."
+    use JSONCodec, strict: true, fast_path: :json
+
+    defstruct [:id, :description, help: nil]
+    @type t :: %__MODULE__{id: String.t(), description: String.t(), help: String.t() | nil}
+  end
+
+  defmodule Fix do
+    @moduledoc "tsgolint text edit."
+    use JSONCodec, strict: true, fast_path: :json
+
+    defstruct [:text, :range]
+    @type t :: %__MODULE__{text: String.t(), range: Range.t()}
+  end
+
+  defmodule Suggestion do
+    @moduledoc "tsgolint alternative fix."
+    use JSONCodec, strict: true, fast_path: :json
+
+    defstruct [:message, fixes: []]
+    @type t :: %__MODULE__{message: RuleMessage.t(), fixes: [Fix.t()]}
+  end
+
+  defmodule LabeledRange do
+    @moduledoc "tsgolint secondary location."
+    use JSONCodec, strict: true, fast_path: :json
+
+    defstruct [:label, :range]
+    @type t :: %__MODULE__{label: String.t(), range: Range.t()}
+  end
+
+  defmodule DiagnosticPayload do
+    @moduledoc "tsgolint diagnostic frame. `:rule` findings always carry a rule, range, and file."
+    use JSONCodec, strict: true, fast_path: :json
+
+    defstruct [
+      :kind,
+      :message,
+      range: nil,
+      file_path: nil,
+      rule: nil,
+      fixes: [],
+      suggestions: [],
+      labeled_ranges: []
+    ]
+
+    @type t :: %__MODULE__{
+            kind: :rule | :internal,
+            message: RuleMessage.t(),
+            range: Range.t() | nil,
+            file_path: String.t() | nil,
+            rule: String.t() | nil,
+            fixes: [Fix.t()],
+            suggestions: [Suggestion.t()],
+            labeled_ranges: [LabeledRange.t()]
+          }
+
+    codec(:kind, cast: :kind)
+
+    @doc "Decode tsgolint's numeric diagnostic kind: `0` for rule findings, `1` for internal diagnostics."
+    def kind(0), do: :rule
+    def kind(1), do: :internal
+
+    def kind(kind),
+      do:
+        raise(JSONCodec.Error,
+          path: [:kind],
+          expected: "0 or 1",
+          got: kind,
+          reason: :invalid_value
+        )
+  end
+
+  defmodule ErrorPayload do
+    @moduledoc "tsgolint error frame."
+    use JSONCodec, strict: true, fast_path: :json
+
+    defstruct [:error]
+    @type t :: %__MODULE__{error: String.t()}
+  end
+
   @type severity :: OXC.Lint.severity()
   @type diagnostic :: OXC.Lint.diagnostic()
 
+  @type option ::
+          {:type_aware, true}
+          | {:rules, %{String.t() => OXC.Lint.severity() | {OXC.Lint.severity(), term()}}}
+          | {:tsgolint, String.t()}
+          | {:type_check, boolean()}
+          | {:report_syntactic, boolean()}
+          | {:report_semantic, boolean()}
+          | {:fix, boolean()}
+          | {:fix_suggestions, boolean()}
+          | {:source_overrides, %{String.t() => String.t()}}
+          | {:cwd, Path.t()}
+
   @doc "Run tsgolint on a list of files."
-  @spec run([String.t()], keyword()) :: {:ok, [diagnostic()]} | {:error, [diagnostic()]}
+  @spec run([String.t()], [option()]) :: {:ok, [diagnostic()]} | {:error, [diagnostic()]}
   def run(files, opts \\ []) when is_list(files) do
     with {:ok, executable} <- find_executable(opts),
          {:ok, output} <- run_tsgolint(executable, files, opts),
@@ -80,7 +182,11 @@ defmodule OXC.Lint.TypeAware do
     end
   end
 
-  @doc false
+  @doc """
+  Parse tsgolint headless output frames into raw findings, or the error messages it reported.
+
+  `severities` maps tsgolint rule names to their configured `t:OXC.Lint.severity/0`.
+  """
   def parse_output(output, severities \\ %{}) when is_binary(output) do
     parse_frames(output, severities, [], [])
   end
@@ -183,51 +289,25 @@ defmodule OXC.Lint.TypeAware do
   end
 
   defp rules(opts) do
-    opts
-    |> Keyword.get(:rules, %{})
-    |> Enum.reject(fn {_name, config} -> severity(config) == :allow end)
-    |> Enum.map(fn {name, config} ->
+    for {name, config} <- Keyword.get(opts, :rules, %{}), severity(config) != :allow do
       %Rule{name: tsgolint_rule_name(name), options: rule_options(config)}
-    end)
+    end
   end
 
   defp severity_by_rule(opts) do
     Map.new(Keyword.get(opts, :rules, %{}), fn {name, config} ->
-      severity = severity(config)
-      stripped = tsgolint_rule_name(name)
-      {stripped, severity}
+      {tsgolint_rule_name(name), severity(config)}
     end)
   end
 
-  defp severity({level, _options}), do: normalize_severity(level)
-  defp severity([level | _options]), do: normalize_severity(level)
-  defp severity(level), do: normalize_severity(level)
+  defp severity({severity, _options}), do: severity
+  defp severity(severity), do: severity
 
-  defp normalize_severity(:deny), do: :deny
-  defp normalize_severity(:error), do: :deny
-  defp normalize_severity(:warn), do: :warn
-  defp normalize_severity(:allow), do: :allow
-  defp normalize_severity(:off), do: :allow
-  defp normalize_severity("deny"), do: :deny
-  defp normalize_severity("error"), do: :deny
-  defp normalize_severity("warn"), do: :warn
-  defp normalize_severity("allow"), do: :allow
-  defp normalize_severity("off"), do: :allow
-  defp normalize_severity(_level), do: :warn
+  defp rule_options({_severity, options}), do: options
+  defp rule_options(_severity), do: nil
 
-  defp rule_options({_level, options}), do: options
-  defp rule_options([_level, options]), do: options
-  defp rule_options(_level), do: nil
-
-  defp tsgolint_rule_name(name) do
-    name
-    |> to_string()
-    |> String.replace_prefix("typescript/", "")
-  end
-
-  defp public_rule_name(nil), do: "typescript"
-  defp public_rule_name("typescript/" <> _ = rule), do: rule
-  defp public_rule_name(rule), do: "typescript/#{rule}"
+  defp tsgolint_rule_name("typescript/" <> name), do: name
+  defp tsgolint_rule_name(name), do: name
 
   defp headless_flags(opts) do
     []
@@ -271,48 +351,53 @@ defmodule OXC.Lint.TypeAware do
   end
 
   defp decode_frame(0, payload, _severities) do
-    case Jason.decode(payload) do
-      {:ok, %{"error" => message}} -> {:error, message}
-      _ -> {:error, payload}
+    case ErrorPayload.decode(payload) do
+      {:ok, %ErrorPayload{error: message}} -> {:error, message}
+      {:error, error} -> {:error, "invalid tsgolint error frame: #{Exception.message(error)}"}
     end
   end
 
   defp decode_frame(1, payload, severities) do
-    case Jason.decode(payload) do
-      {:ok, decoded} -> {:diagnostic, normalize_diagnostic(decoded, severities)}
-      {:error, _} -> :ignore
+    case DiagnosticPayload.decode(payload) do
+      {:ok, diagnostic} -> {:diagnostic, finding(diagnostic, severities)}
+      {:error, error} -> {:error, "invalid tsgolint diagnostic: #{Exception.message(error)}"}
     end
   end
 
   defp decode_frame(_type, _payload, _severities), do: :ignore
 
   # A raw finding in the shape `OXC.Diagnostic.from_raw/3` accepts, plus the reported file.
-  defp normalize_diagnostic(decoded, severities) do
-    rule = public_rule_name(decoded["rule"] || get_in(decoded, ["message", "id"]))
+  # Rule findings take the configured severity; internal TypeScript diagnostics are errors.
+  defp finding(%DiagnosticPayload{kind: :rule, rule: rule} = diagnostic, severities) do
+    severity = if Map.get(severities, rule) == :deny, do: :error, else: :warning
+    finding(diagnostic, "typescript/" <> rule, severity)
+  end
 
+  defp finding(%DiagnosticPayload{kind: :internal, message: message} = diagnostic, _severities) do
+    finding(diagnostic, "typescript/" <> message.id, :error)
+  end
+
+  defp finding(%DiagnosticPayload{message: message} = diagnostic, rule, severity) do
     %{
-      file: decoded["file_path"],
+      file: diagnostic.file_path,
       rule: rule,
-      message: get_in(decoded, ["message", "description"]) || "",
-      severity:
-        if(Map.get(severities, tsgolint_rule_name(rule)) == :deny, do: :error, else: :warning),
-      help: get_in(decoded, ["message", "help"]),
-      labels: [
-        label(decoded["range"], nil)
-        | Enum.map(decoded["labeled_ranges"] || [], &label(&1["range"], &1["label"]))
-      ],
-      fixes: Enum.map(decoded["fixes"] || [], &fix/1),
+      severity: severity,
+      message: message.description,
+      help: message.help,
+      labels: primary_label(diagnostic.range) ++ Enum.map(diagnostic.labeled_ranges, &label/1),
+      fixes: Enum.map(diagnostic.fixes, &fix/1),
       suggestions:
-        Enum.map(decoded["suggestions"] || [], fn suggestion ->
-          %{
-            message: get_in(suggestion, ["message", "description"]),
-            fixes: Enum.map(suggestion["fixes"] || [], &fix/1)
-          }
+        Enum.map(diagnostic.suggestions, fn %Suggestion{message: message, fixes: fixes} ->
+          %{message: message.description, fixes: Enum.map(fixes, &fix/1)}
         end)
     }
   end
 
-  defp label(range, message), do: {range["pos"] || 0, range["end"] || 0, message}
+  defp primary_label(nil), do: []
+  defp primary_label(%Range{pos: start, end: stop}), do: [{start, stop, nil}]
 
-  defp fix(%{"text" => text, "range" => range}), do: {range["pos"] || 0, range["end"] || 0, text}
+  defp label(%LabeledRange{label: label, range: %Range{pos: start, end: stop}}),
+    do: {start, stop, label}
+
+  defp fix(%Fix{text: text, range: %Range{pos: start, end: stop}}), do: {start, stop, text}
 end

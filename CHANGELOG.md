@@ -12,10 +12,14 @@ This release breaks compatibility: errors and lint findings now share one shape.
 - Remove `OXC.Lint.TypeAware.Diagnostic`; type-aware lint returns the same maps, computing positions from `source_overrides` when given.
 - `OXC.Lint` and `OXC.Format` return diagnostics instead of strings on failure.
 - Custom `OXC.Lint.Rule` findings use AST node `start` and `end` offsets instead of `span: {start, end}`; label entries are `%{start, end, message}` maps. Rules configured with `:allow` no longer run.
+- Lint options cross into the linter as typed values: plugins, rule severities, and global access are atoms decoded into Rust enums, and rule, environment, and global names are strings. `:env` takes a list of environment names such as `["browser", "node"]`; atom names and the map form are no longer accepted, nor are string severities or boolean global access.
+- Type-aware rules take `severity` or `{severity, options}`; the list form and string severities are no longer accepted.
+- Decode tsgolint output into `JSONCodec` structs that mirror its wire format. Malformed frames are reported as errors instead of being dropped.
 - `OXC.Error` builds its message from its diagnostics as `file:line:column: message`, and every bang function, including `OXC.Lint.run!/3` and `OXC.Format.run!/3`, raises it with `errors: diagnostics`.
 
 ### Fixed
 
+- Report tsgolint's internal TypeScript diagnostics (`type_check: true`) as errors under `typescript/<code>`, as oxlint does, instead of as warnings.
 - Return lint fixes when `fix: true` is set. They were computed but dropped; they are now `OXC.patch_string/2` patches in `fixes`.
 
 ## 0.17.8 - 2026-07-20

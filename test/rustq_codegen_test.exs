@@ -9,7 +9,10 @@ defmodule OXC.RustQCodegenTest do
     assert source =~ "pub struct LintInput"
     assert source =~ "pub struct Diagnostic"
     assert source =~ "rustler::NifMap"
-    assert source =~ "pub severity: Atom"
+    assert source =~ "rustler::NifUnitEnum"
+    assert source =~ "pub severity: FindingSeverity"
+    assert source =~ "pub rules: Vec<(String, RuleSeverity)>"
+    assert source =~ "pub plugins: Vec<Plugin>"
     assert RustQ.valid?(source, "oxc_lint_types.rs")
   end
 end

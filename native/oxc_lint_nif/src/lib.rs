@@ -11,40 +11,56 @@ use oxc_linter::{
 use oxc_parser::{ParseOptions, Parser};
 use oxc_semantic::SemanticBuilder;
 use oxc_span::SourceType;
-use rustler::{Atom, Binary, Encoder, Env, Error, NifResult, Term};
+use rustler::{Binary, Encoder, Env, Error, NifResult, Term};
 
 include!("generated_atoms.rs");
 
 include!("generated_types.rs");
 
-fn parse_plugins(plugin_strs: &[String]) -> LintPlugins {
-    let mut plugins = LintPlugins::empty();
-    for plugin in plugin_strs {
-        match plugin.as_str() {
-            "react" => plugins |= LintPlugins::REACT,
-            "unicorn" => plugins |= LintPlugins::UNICORN,
-            "typescript" => plugins |= LintPlugins::TYPESCRIPT,
-            "oxc" => plugins |= LintPlugins::OXC,
-            "import" => plugins |= LintPlugins::IMPORT,
-            "jsdoc" => plugins |= LintPlugins::JSDOC,
-            "jest" => plugins |= LintPlugins::JEST,
-            "vitest" => plugins |= LintPlugins::VITEST,
-            "jsx_a11y" | "jsx-a11y" => plugins |= LintPlugins::JSX_A11Y,
-            "nextjs" | "next" => plugins |= LintPlugins::NEXTJS,
-            "react_perf" | "react-perf" => plugins |= LintPlugins::REACT_PERF,
-            "promise" => plugins |= LintPlugins::PROMISE,
-            "node" => plugins |= LintPlugins::NODE,
-            "vue" => plugins |= LintPlugins::VUE,
-            _ => {}
-        }
-    }
+fn lint_plugins(plugins: &[Plugin]) -> LintPlugins {
     plugins
+        .iter()
+        .fold(LintPlugins::empty(), |plugins, plugin| {
+            plugins
+                | match plugin {
+                    Plugin::React => LintPlugins::REACT,
+                    Plugin::Unicorn => LintPlugins::UNICORN,
+                    Plugin::Typescript => LintPlugins::TYPESCRIPT,
+                    Plugin::Oxc => LintPlugins::OXC,
+                    Plugin::Import => LintPlugins::IMPORT,
+                    Plugin::Jsdoc => LintPlugins::JSDOC,
+                    Plugin::Jest => LintPlugins::JEST,
+                    Plugin::Vitest => LintPlugins::VITEST,
+                    Plugin::JsxA11y => LintPlugins::JSX_A11Y,
+                    Plugin::Nextjs => LintPlugins::NEXTJS,
+                    Plugin::ReactPerf => LintPlugins::REACT_PERF,
+                    Plugin::Promise => LintPlugins::PROMISE,
+                    Plugin::Node => LintPlugins::NODE,
+                    Plugin::Vue => LintPlugins::VUE,
+                }
+        })
 }
 
-fn severity_atom(severity: AllowWarnDeny) -> rustler::Atom {
+fn finding_severity(severity: AllowWarnDeny) -> FindingSeverity {
     match severity {
-        AllowWarnDeny::Deny => atoms::error(),
-        AllowWarnDeny::Allow | AllowWarnDeny::Warn => atoms::warning(),
+        AllowWarnDeny::Deny => FindingSeverity::Error,
+        AllowWarnDeny::Allow | AllowWarnDeny::Warn => FindingSeverity::Warning,
+    }
+}
+
+fn allow_warn_deny(severity: RuleSeverity) -> AllowWarnDeny {
+    match severity {
+        RuleSeverity::Allow => AllowWarnDeny::Allow,
+        RuleSeverity::Warn => AllowWarnDeny::Warn,
+        RuleSeverity::Deny => AllowWarnDeny::Deny,
+    }
+}
+
+fn global_access(access: GlobalAccess) -> &'static str {
+    match access {
+        GlobalAccess::Readonly => "readonly",
+        GlobalAccess::Writable => "writable",
+        GlobalAccess::Off => "off",
     }
 }
 
@@ -79,42 +95,33 @@ fn fixes(fixes: &PossibleFixes) -> Vec<(u32, u32, String)> {
         .collect()
 }
 
-fn parse_severity(s: &str) -> AllowWarnDeny {
-    match s {
-        "deny" | "error" => AllowWarnDeny::Deny,
-        "warn" => AllowWarnDeny::Warn,
-        "allow" | "off" => AllowWarnDeny::Allow,
-        _ => AllowWarnDeny::Warn,
-    }
-}
-
 struct LintConfig {
     config_store: ConfigStore,
     rule_severity_map: std::collections::HashMap<String, AllowWarnDeny>,
 }
 
 fn build_lint_config(
-    plugins: &[String],
-    rules: &[(String, String)],
-    envs: &[(String, bool)],
-    globals: &[(String, String)],
+    plugins: &[Plugin],
+    rules: &[(String, RuleSeverity)],
+    envs: &[String],
+    globals: &[(String, GlobalAccess)],
 ) -> Result<LintConfig, String> {
     let lint_plugins = if plugins.is_empty() {
         LintPlugins::default()
     } else {
-        parse_plugins(plugins)
+        lint_plugins(plugins)
     };
 
     let mut external_plugin_store = ExternalPluginStore::default();
 
     let globals = globals
         .iter()
-        .map(|(name, value)| (name.clone(), serde_json::Value::String(value.clone())))
+        .map(|(name, access)| (name.clone(), global_access(*access).into()))
         .collect::<serde_json::Map<_, _>>();
 
     let envs = envs
         .iter()
-        .map(|(name, enabled)| (name.clone(), serde_json::Value::Bool(*enabled)))
+        .map(|name| (name.clone(), true.into()))
         .collect::<serde_json::Map<_, _>>();
 
     let oxlintrc = serde_json::from_value(serde_json::json!({"env": envs, "globals": globals}))
@@ -125,8 +132,8 @@ fn build_lint_config(
             .map_err(|e| format!("Failed to configure lint globals: {e}"))?
             .with_builtin_plugins(lint_plugins);
 
-    for (rule_name, severity_str) in rules {
-        let severity = parse_severity(severity_str.as_str());
+    for (rule_name, severity) in rules {
+        let severity = allow_warn_deny(*severity);
         let filter_kind = LintFilterKind::parse(std::borrow::Cow::Owned(rule_name.clone()))
             .map_err(|e| format!("Invalid rule filter '{rule_name}': {e}"))?;
         let filter = LintFilter::new(severity, filter_kind)
@@ -255,7 +262,7 @@ fn lint_impl<'a>(
             Diagnostic {
                 rule: full_rule,
                 message: msg.error.message.to_string(),
-                severity: severity_atom(severity),
+                severity: finding_severity(severity),
                 labels: match labels(&msg.error) {
                     labels if labels.is_empty() => vec![(msg.span.start, msg.span.end, None)],
                     labels => labels,

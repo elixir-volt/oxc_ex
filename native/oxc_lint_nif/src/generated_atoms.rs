@@ -2,6 +2,6 @@
 
 mod atoms {
     rustler::atoms! {
-        ok, error, warning
+        ok, error
     }
 }

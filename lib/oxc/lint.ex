@@ -18,6 +18,31 @@ defmodule OXC.Lint do
   @typedoc "Rule severity in lint options. Findings report `:error` for `:deny` and `:warning` for `:warn`."
   @type severity :: :allow | :warn | :deny
   @type diagnostic :: OXC.Diagnostic.t()
+  @type global_access :: :readonly | :writable | :off
+  @type plugin ::
+          :react
+          | :unicorn
+          | :typescript
+          | :oxc
+          | :import
+          | :jsdoc
+          | :jest
+          | :vitest
+          | :jsx_a11y
+          | :nextjs
+          | :react_perf
+          | :promise
+          | :node
+          | :vue
+
+  @type option ::
+          {:rules, %{String.t() => severity()}}
+          | {:plugins, [plugin()]}
+          | {:env, [String.t()]}
+          | {:globals, %{String.t() => global_access()}}
+          | {:fix, boolean()}
+          | {:custom_rules, [{module(), severity()}]}
+          | {:settings, map()}
 
   @doc """
   Lint source code with oxlint's built-in rules and optional custom rules.
@@ -44,9 +69,11 @@ defmodule OXC.Lint do
 
     * `:fix` — compute fix suggestions. Default: `false`
 
-    * `:env` — list of enabled Oxlint environments (for example `[:browser, :node, :mocha]`), or a map of environment names to booleans.
+    * `:env` — list of enabled Oxlint environment names, for example
+      `["browser", "node", "mocha"]`.
 
-    * `:globals` — map of global names to `:readonly`, `:writable`, or `:off`.
+    * `:globals` — map of global names to `:readonly`, `:writable`, or `:off`,
+      for example `%{"jQuery" => :readonly}`.
 
     * `:custom_rules` — list of `{module, severity}` tuples for Elixir rules.
       Each module must implement the `OXC.Lint.Rule` behaviour.
@@ -70,8 +97,9 @@ defmodule OXC.Lint do
         custom_rules: [{MyApp.NoConsoleLog, :warn}]
       )
   """
-  @spec run([String.t()], keyword()) :: {:ok, [diagnostic()]} | {:error, [diagnostic()]}
-  @spec run(iodata(), String.t(), keyword()) :: {:ok, [diagnostic()]} | {:error, [diagnostic()]}
+  @spec run([String.t()], [OXC.Lint.TypeAware.option()]) ::
+          {:ok, [diagnostic()]} | {:error, [diagnostic()]}
+  @spec run(iodata(), String.t(), [option()]) :: {:ok, [diagnostic()]} | {:error, [diagnostic()]}
   def run(files, opts) when is_list(files) and is_list(opts) do
     if Keyword.get(opts, :type_aware, false) do
       OXC.Lint.TypeAware.run(files, opts)
@@ -87,25 +115,16 @@ defmodule OXC.Lint do
 
   def run(source, filename, opts \\ []) do
     source = IO.iodata_to_binary(source)
-    plugins = opts |> Keyword.get(:plugins, []) |> Enum.map(&to_string/1)
-    fix = Keyword.get(opts, :fix, false)
-
-    rules =
-      opts
-      |> Keyword.get(:rules, %{})
-      |> Enum.map(fn {name, severity} -> {to_string(name), severity_to_string(severity)} end)
-
-    envs = normalize_envs(Keyword.get(opts, :env, []))
-
-    globals =
-      opts
-      |> Keyword.get(:globals, %{})
-      |> Enum.map(fn {name, access} -> {to_string(name), global_access_to_string(access)} end)
-
     custom_rules = Keyword.get(opts, :custom_rules, [])
     settings = Keyword.get(opts, :settings, %{})
 
-    input = %{plugins: plugins, rules: rules, envs: envs, globals: globals, fix: fix}
+    input = %{
+      plugins: Keyword.get(opts, :plugins, []),
+      rules: opts |> Keyword.get(:rules, %{}) |> Map.to_list(),
+      envs: Keyword.get(opts, :env, []),
+      globals: opts |> Keyword.get(:globals, %{}) |> Map.to_list(),
+      fix: Keyword.get(opts, :fix, false)
+    }
 
     case OXC.Lint.Native.lint(source, filename, input) do
       {:ok, builtin} ->
@@ -120,27 +139,10 @@ defmodule OXC.Lint do
   @doc """
   Like `run/3` but raises on errors.
   """
-  @spec run!(iodata(), String.t(), keyword()) :: [diagnostic()]
+  @spec run!(iodata(), String.t(), [option()]) :: [diagnostic()]
   def run!(source, filename, opts \\ []) do
     source |> run(filename, opts) |> OXC.Error.unwrap!()
   end
-
-  defp normalize_envs(envs) when is_list(envs), do: Enum.map(envs, &{to_string(&1), true})
-
-  defp normalize_envs(envs) when is_map(envs) do
-    Enum.map(envs, fn {name, enabled} -> {to_string(name), enabled} end)
-  end
-
-  defp global_access_to_string(:readonly), do: "readonly"
-  defp global_access_to_string(:writable), do: "writable"
-  defp global_access_to_string(:off), do: "off"
-  defp global_access_to_string(false), do: "readonly"
-  defp global_access_to_string(true), do: "writable"
-  defp global_access_to_string(access) when is_binary(access), do: access
-
-  defp severity_to_string(:deny), do: "deny"
-  defp severity_to_string(:warn), do: "warn"
-  defp severity_to_string(:allow), do: "allow"
 
   defp run_custom_rules([], _source, _filename, _settings), do: []
 

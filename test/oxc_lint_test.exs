@@ -39,7 +39,7 @@ defmodule OXC.LintTest do
       {:ok, diags} =
         OXC.Lint.run("document; process; describe; missingGlobal;", "test.js",
           rules: %{"no-undef" => :deny},
-          env: [:browser, :node, :mocha]
+          env: ["browser", "node", "mocha"]
         )
 
       assert Enum.any?(diags, &(&1.message =~ "missingGlobal"))
@@ -144,7 +144,7 @@ defmodule OXC.LintTest do
 
     test "parses tsgolint diagnostic frames" do
       diagnostic = %{
-        "kind" => 1,
+        "kind" => 0,
         "range" => %{"pos" => 4, "end" => 12},
         "rule" => "no-floating-promises",
         "message" => %{"id" => "floating", "description" => "Promise is not handled"},
@@ -297,6 +297,30 @@ defmodule OXC.LintTest do
       assert message =~ "panic: Unknown script kind"
     end
 
+    test "reports internal TypeScript diagnostics as errors" do
+      diagnostic = %{
+        "kind" => 1,
+        "range" => %{"pos" => 6, "end" => 11},
+        "message" => %{"id" => "TS2322", "description" => "Type 'number' is not assignable"},
+        "file_path" => "/tmp/app.ts"
+      }
+
+      assert {:ok, [finding]} =
+               OXC.Lint.TypeAware.parse_output(frame(1, Jason.encode!(diagnostic)), %{})
+
+      assert finding.rule == "typescript/TS2322"
+      assert finding.severity == :error
+      assert finding.labels == [{6, 11, nil}]
+    end
+
+    test "reports malformed diagnostic frames as errors" do
+      assert {:error, [message]} =
+               OXC.Lint.TypeAware.parse_output(frame(1, Jason.encode!(%{"kind" => 0})))
+
+      assert message =~ "invalid tsgolint diagnostic"
+      assert message =~ "message"
+    end
+
     test "parses tsgolint error frames" do
       frame = frame(0, Jason.encode!(%{"error" => "boom"}))
       assert {:error, ["boom"]} = OXC.Lint.TypeAware.parse_output(frame)
@@ -367,7 +391,7 @@ defmodule OXC.LintTest do
 
     defp diagnostic_payload(rule, start, stop) do
       %{
-        "kind" => 1,
+        "kind" => 0,
         "range" => %{"pos" => start, "end" => stop},
         "rule" => rule,
         "message" => %{"id" => rule, "description" => "diagnostic from #{rule}"},
@@ -389,7 +413,7 @@ defmodule OXC.LintTest do
         [IO.File]::WriteAllText('#{ps_quote(argv_path)}', $argv, [Text.UTF8Encoding]::new($false))
         $data = $payload | ConvertFrom-Json
         $diagnostic = [ordered]@{
-          kind = 1
+          kind = 0
           range = @{pos = 1; end = 5}
           rule = 'no-floating-promises'
           message = @{id = 'no-floating-promises'; description = 'Promise is not handled'}
@@ -413,7 +437,7 @@ defmodule OXC.LintTest do
         data = json.loads(payload)
         file_path = data["configs"][0]["file_paths"][0]
         body = json.dumps({
-          "kind": 1,
+          "kind": 0,
           "range": {"pos": 1, "end": 5},
           "rule": "no-floating-promises",
           "message": {"id": "no-floating-promises", "description": "Promise is not handled"},

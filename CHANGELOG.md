@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.18.0 - 2026-09-29
 
 This release breaks compatibility: errors and lint findings now share one shape.
 

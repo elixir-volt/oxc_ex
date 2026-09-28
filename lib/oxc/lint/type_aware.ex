@@ -28,7 +28,7 @@ defmodule OXC.Lint.TypeAware do
 
   defmodule Range do
     @moduledoc "tsgolint byte range."
-    use JSONCodec, strict: true, fast_path: :json
+    use JSONCodec, strict: true
 
     defstruct [:pos, :end]
     @type t :: %__MODULE__{pos: non_neg_integer(), end: non_neg_integer()}
@@ -36,7 +36,7 @@ defmodule OXC.Lint.TypeAware do
 
   defmodule RuleMessage do
     @moduledoc "tsgolint diagnostic message."
-    use JSONCodec, strict: true, fast_path: :json
+    use JSONCodec, strict: true
 
     defstruct [:id, :description, help: nil]
     @type t :: %__MODULE__{id: String.t(), description: String.t(), help: String.t() | nil}
@@ -44,7 +44,7 @@ defmodule OXC.Lint.TypeAware do
 
   defmodule Fix do
     @moduledoc "tsgolint text edit."
-    use JSONCodec, strict: true, fast_path: :json
+    use JSONCodec, strict: true
 
     defstruct [:text, :range]
     @type t :: %__MODULE__{text: String.t(), range: Range.t()}
@@ -52,7 +52,7 @@ defmodule OXC.Lint.TypeAware do
 
   defmodule Suggestion do
     @moduledoc "tsgolint alternative fix."
-    use JSONCodec, strict: true, fast_path: :json
+    use JSONCodec, strict: true
 
     defstruct [:message, fixes: []]
     @type t :: %__MODULE__{message: RuleMessage.t(), fixes: [Fix.t()]}
@@ -60,7 +60,7 @@ defmodule OXC.Lint.TypeAware do
 
   defmodule LabeledRange do
     @moduledoc "tsgolint secondary location."
-    use JSONCodec, strict: true, fast_path: :json
+    use JSONCodec, strict: true
 
     defstruct [:label, :range]
     @type t :: %__MODULE__{label: String.t(), range: Range.t()}
@@ -68,7 +68,7 @@ defmodule OXC.Lint.TypeAware do
 
   defmodule DiagnosticPayload do
     @moduledoc "tsgolint diagnostic frame. `:rule` findings always carry a rule, range, and file."
-    use JSONCodec, strict: true, fast_path: :json
+    use JSONCodec, strict: true
 
     defstruct [
       :kind,
@@ -95,22 +95,14 @@ defmodule OXC.Lint.TypeAware do
     codec(:kind, cast: :kind)
 
     @doc "Decode tsgolint's numeric diagnostic kind: `0` for rule findings, `1` for internal diagnostics."
-    def kind(0), do: :rule
-    def kind(1), do: :internal
-
-    def kind(kind),
-      do:
-        raise(JSONCodec.Error,
-          path: [:kind],
-          expected: "0 or 1",
-          got: kind,
-          reason: :invalid_value
-        )
+    def kind(0), do: {:ok, :rule}
+    def kind(1), do: {:ok, :internal}
+    def kind(_kind), do: :error
   end
 
   defmodule ErrorPayload do
     @moduledoc "tsgolint error frame."
-    use JSONCodec, strict: true, fast_path: :json
+    use JSONCodec, strict: true
 
     defstruct [:error]
     @type t :: %__MODULE__{error: String.t()}
@@ -206,7 +198,7 @@ defmodule OXC.Lint.TypeAware do
 
   defp run_tsgolint(executable, files, opts) do
     payload_path = write_payload!(build_payload(files, opts))
-    stderr_path = tmp_path("oxc-tsgolint-stderr")
+    stderr_path = OXC.Process.tmp_path("oxc-tsgolint-stderr")
     args = ["headless" | headless_flags(opts)]
 
     try do
@@ -217,31 +209,23 @@ defmodule OXC.Lint.TypeAware do
           cd: Keyword.get(opts, :cwd, File.cwd!())
         )
 
-      stderr = read_file(stderr_path)
+      stderr = OXC.Process.read_file(stderr_path)
       handle_tsgolint_result(output, stderr, status, severity_by_rule(opts))
     after
       File.rm(payload_path)
       File.rm(stderr_path)
     end
   rescue
+    # Boundary around an external program: any failure to launch or talk to
+    # tsgolint becomes an error result instead of crashing the caller.
+    # reach:disable-next-line bare_rescue
     exception -> {:error, [Exception.message(exception)]}
   end
 
   defp write_payload!(payload) do
-    path = tmp_path("oxc-tsgolint-payload", ".json")
+    path = OXC.Process.tmp_path("oxc-tsgolint-payload", ".json")
     File.write!(path, Jason.encode!(payload))
     path
-  end
-
-  defp tmp_path(prefix, extension \\ "") do
-    Path.join(System.tmp_dir!(), "#{prefix}-#{System.unique_integer([:positive])}#{extension}")
-  end
-
-  defp read_file(path) do
-    case File.read(path) do
-      {:ok, content} -> content
-      {:error, _reason} -> ""
-    end
   end
 
   defp handle_tsgolint_result(output, _stderr, 0, _severities), do: {:ok, output}

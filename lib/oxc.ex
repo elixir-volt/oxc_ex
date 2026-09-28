@@ -600,6 +600,8 @@ defmodule OXC do
   # serializer which emits a known set of ESTree field names.
   defp atomize_term_keys(map) when is_map(map) do
     Map.new(map, fn {key, value} ->
+      # Native results have only string keys, so converting them cannot collide.
+      # reach:disable-next-line key_normalization_collision
       atom_key = if is_binary(key), do: String.to_atom(key), else: key
       {atom_key, atomize_value(atom_key, value)}
     end)

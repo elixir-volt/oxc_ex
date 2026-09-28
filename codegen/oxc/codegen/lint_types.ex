@@ -27,13 +27,11 @@ defmodule OXC.Codegen.LintTypes do
           | :node
           | :vue
 
-  # Enums are referenced by Rust name: RustQ 1.0.0-rc.3 resolves local type
-  # references in alphabetical order, leaving later aliases unresolved.
   @type lint_input :: %{
-          required(:plugins) => [R.path(:Plugin)],
-          required(:rules) => [{String.t(), R.path(:RuleSeverity)}],
+          required(:plugins) => [plugin()],
+          required(:rules) => [{String.t(), rule_severity()}],
           required(:envs) => [String.t()],
-          required(:globals) => [{String.t(), R.path(:GlobalAccess)}],
+          required(:globals) => [{String.t(), global_access()}],
           required(:fix) => boolean()
         }
 

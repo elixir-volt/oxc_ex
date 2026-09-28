@@ -17,6 +17,8 @@ This release breaks compatibility: errors and lint findings now share one shape.
 - Decode tsgolint output into `JSONCodec` structs that mirror its wire format. Malformed frames are reported as errors instead of being dropped.
 - `OXC.Error` builds its message from its diagnostics as `file:line:column: message`, and every bang function, including `OXC.Lint.run!/3` and `OXC.Format.run!/3`, raises it with `errors: diagnostics`.
 
+- Require json_codec 0.3.
+
 ### Fixed
 
 - Report tsgolint's internal TypeScript diagnostics (`type_check: true`) as errors under `typescript/<code>`, as oxlint does, instead of as warnings.

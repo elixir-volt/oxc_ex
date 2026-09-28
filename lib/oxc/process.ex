@@ -66,11 +66,15 @@ defmodule OXC.Process do
 
   defp windows_path(path), do: String.replace(path, "/", "\\")
 
-  defp tmp_path(prefix, extension \\ "") do
+  @doc "Returns a unique path in the system temporary directory."
+  @spec tmp_path(String.t(), String.t()) :: Path.t()
+  def tmp_path(prefix, extension \\ "") do
     Path.join(System.tmp_dir!(), "#{prefix}-#{System.unique_integer([:positive])}#{extension}")
   end
 
-  defp read_file(path) do
+  @doc "Reads a file a subprocess wrote, or returns an empty string when it is missing."
+  @spec read_file(Path.t()) :: String.t()
+  def read_file(path) do
     case File.read(path) do
       {:ok, content} -> content
       {:error, _reason} -> ""

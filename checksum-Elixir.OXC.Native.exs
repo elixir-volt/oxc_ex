@@ -1,8 +1,8 @@
 %{
-  "liboxc_ex_nif-v0.17.8-nif-2.15-aarch64-apple-darwin.so.tar.gz" => "sha256:7a227f1b4181bfc9ef4ff72d5e3b7ac334b7f25f2545299a29f5c7802cd0abb5",
-  "liboxc_ex_nif-v0.17.8-nif-2.15-aarch64-unknown-linux-gnu.so.tar.gz" => "sha256:c75343686100f0437ccbf60e123ae288189ba2e18200b8ed45b1a8676a55c436",
-  "liboxc_ex_nif-v0.17.8-nif-2.15-x86_64-apple-darwin.so.tar.gz" => "sha256:db751aee1197ac38bf45fcc04ff561df270b84d1248d57c07cb2a99d35cb8018",
-  "liboxc_ex_nif-v0.17.8-nif-2.15-x86_64-unknown-linux-gnu.so.tar.gz" => "sha256:ac23d238ee416d8bc6f029bd5ab1576e43b2c0564a7b970c4652c2b9929a4e71",
-  "liboxc_ex_nif-v0.17.8-nif-2.15-x86_64-unknown-linux-musl.so.tar.gz" => "sha256:a13a080bdedb115120f480ce32a659ffd0aa190013c1cc9e353d14c68d609c24",
-  "oxc_ex_nif-v0.17.8-nif-2.15-x86_64-pc-windows-msvc.dll.tar.gz" => "sha256:3d7faf9a779c0d6fb5d399cddd63359c2adb8af38c084a3ccda7c0fc4f7815ad",
+  "liboxc_ex_nif-v0.18.0-nif-2.15-aarch64-apple-darwin.so.tar.gz" => "sha256:d1a53d8ff188a2941daa8adf926d3ba16b1b809b6f879eb26c7923c7e47e9bb6",
+  "liboxc_ex_nif-v0.18.0-nif-2.15-aarch64-unknown-linux-gnu.so.tar.gz" => "sha256:d9e2ef3b90f7e550ac2d2deb7059380efa2bbd721d5ddc5f4bb2ca6f38f5788e",
+  "liboxc_ex_nif-v0.18.0-nif-2.15-x86_64-apple-darwin.so.tar.gz" => "sha256:edd42fd9e9aa630c583acfe7d8dd8a459907d0f43ef5ce75d008feb1087384cb",
+  "liboxc_ex_nif-v0.18.0-nif-2.15-x86_64-unknown-linux-gnu.so.tar.gz" => "sha256:321064b599630e3e75b445f2d017bedc3faa5344c980b33942221010cd0f8b7d",
+  "liboxc_ex_nif-v0.18.0-nif-2.15-x86_64-unknown-linux-musl.so.tar.gz" => "sha256:e991ce42451dc6d01c57a393ce93f90b5d7db068ae78730328d1542cf5115653",
+  "oxc_ex_nif-v0.18.0-nif-2.15-x86_64-pc-windows-msvc.dll.tar.gz" => "sha256:e12f35f6a6b6902829ef592b126d53da3cfb55f80cbebf71d1560e661eadf656",
 }

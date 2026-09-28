@@ -41,6 +41,8 @@ defmodule OXC.MixProject do
     ]
   end
 
+  def cli, do: [preferred_envs: [ci: :test]]
+
   defp docs do
     [
       main: "OXC",
@@ -76,15 +78,27 @@ defmodule OXC.MixProject do
     [
       {:rustler, "~> 0.36 or ~> 0.37 or ~> 0.38", optional: true},
       {:rustler_precompiled, "~> 0.8"},
-      {:rustq, "~> 1.0.0-rc.10", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.35", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.2", only: [:dev, :test], runtime: false},
-      {:reach, "~> 2.5", only: [:dev, :test], runtime: false},
       {:jason, "~> 1.4"},
       {:json_codec, "~> 0.3"}
-    ]
+    ] ++ codegen_and_analysis_deps()
+  end
+
+  # Code generation (RustQ) and analysis (Reach, ExDNA) need Elixir 1.19+.
+  # They only run in `mix ci`; OXC itself supports Elixir 1.17 and builds
+  # and tests without them there.
+  defp codegen_and_analysis_deps do
+    if Version.match?(System.version(), ">= 1.19.0") do
+      [
+        {:rustq, "~> 1.0.0-rc.10", only: [:dev, :test], runtime: false},
+        {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
+        {:reach, "~> 2.5", only: [:dev, :test], runtime: false}
+      ]
+    else
+      []
+    end
   end
 end

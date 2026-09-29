@@ -214,13 +214,11 @@ Enable specific plugins:
 
 ```elixir
 {:ok, diags} = OXC.Lint.run(source, "app.tsx",
-  plugins: [:react, :typescript],
+  plugins: ["react", "typescript"],
   rules: %{"no-console" => :warn, "react/no-danger" => :deny})
 ```
 
-Available plugins: `:react`, `:typescript`, `:unicorn`, `:import`, `:jsdoc`,
-`:jest`, `:vitest`, `:jsx_a11y`, `:nextjs`, `:react_perf`, `:promise`,
-`:node`, `:vue`, `:oxc`.
+Plugin names are the ones an oxlint config uses, such as `"react"`, `"typescript"`, `"jsx-a11y"`, or `"vitest"`; see the [oxlint plugin list](https://oxc.rs/docs/guide/usage/linter/plugins.html).
 
 #### Type-Aware Linting
 

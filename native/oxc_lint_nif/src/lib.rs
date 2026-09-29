@@ -17,27 +17,14 @@ include!("generated_atoms.rs");
 
 include!("generated_types.rs");
 
-fn lint_plugins(plugins: &[Plugin]) -> LintPlugins {
+/// Parses plugin names with oxc_linter's own vocabulary, including its aliases.
+fn lint_plugins(plugins: &[String]) -> Result<LintPlugins, String> {
     plugins
         .iter()
-        .fold(LintPlugins::empty(), |plugins, plugin| {
-            plugins
-                | match plugin {
-                    Plugin::React => LintPlugins::REACT,
-                    Plugin::Unicorn => LintPlugins::UNICORN,
-                    Plugin::Typescript => LintPlugins::TYPESCRIPT,
-                    Plugin::Oxc => LintPlugins::OXC,
-                    Plugin::Import => LintPlugins::IMPORT,
-                    Plugin::Jsdoc => LintPlugins::JSDOC,
-                    Plugin::Jest => LintPlugins::JEST,
-                    Plugin::Vitest => LintPlugins::VITEST,
-                    Plugin::JsxA11y => LintPlugins::JSX_A11Y,
-                    Plugin::Nextjs => LintPlugins::NEXTJS,
-                    Plugin::ReactPerf => LintPlugins::REACT_PERF,
-                    Plugin::Promise => LintPlugins::PROMISE,
-                    Plugin::Node => LintPlugins::NODE,
-                    Plugin::Vue => LintPlugins::VUE,
-                }
+        .try_fold(LintPlugins::empty(), |plugins, name| {
+            LintPlugins::try_from(name.as_str())
+                .map(|plugin| plugins | plugin)
+                .map_err(|()| format!("Unknown lint plugin {name:?}"))
         })
 }
 
@@ -101,7 +88,7 @@ struct LintConfig {
 }
 
 fn build_lint_config(
-    plugins: &[Plugin],
+    plugins: &[String],
     rules: &[(String, RuleSeverity)],
     envs: &[String],
     globals: &[(String, GlobalAccess)],
@@ -109,7 +96,7 @@ fn build_lint_config(
     let lint_plugins = if plugins.is_empty() {
         LintPlugins::default()
     } else {
-        lint_plugins(plugins)
+        lint_plugins(plugins)?
     };
 
     let mut external_plugin_store = ExternalPluginStore::default();

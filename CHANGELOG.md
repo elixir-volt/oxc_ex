@@ -6,7 +6,7 @@
 
 - Errors and lint findings are `Code.diagnostic` maps with `file`, `severity`, `message`, and 1-based `{line, column}` `position` and `span`, plus `rule`, `labels`, `fixes`, and `suggestions` where they apply. See `OXC.Diagnostic`. `OXC.Lint` and `OXC.Format` return diagnostics instead of strings on failure, and `OXC.Lint.TypeAware.Diagnostic` is removed.
 - Lint findings report `:error` and `:warning`. Options still take `:deny`, `:warn`, and `:allow`.
-- `:env` takes environment names as strings, such as `["browser", "node"]`. Type-aware rules take `severity` or `{severity, options}`.
+- `:plugins` and `:env` take names as strings, as in an oxlint config, such as `plugins: ["react", "jsx-a11y"]` and `env: ["browser", "node"]`. Unknown plugins are errors. Type-aware rules take `severity` or `{severity, options}`.
 - Custom `OXC.Lint.Rule` findings use AST `start` and `end` offsets instead of `span: {start, end}`. Rules set to `:allow` no longer run.
 - `OXC.Error` messages read `file:line:column: message`.
 - Requires json_codec 0.3.

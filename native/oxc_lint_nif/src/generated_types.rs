@@ -22,7 +22,7 @@ pub enum GlobalAccess {
 }
 #[derive(Clone, Debug, rustler::NifMap)]
 pub struct LintInput {
-    pub plugins: Vec<Plugin>,
+    pub plugins: Vec<String>,
     pub rules: Vec<(String, RuleSeverity)>,
     pub envs: Vec<String>,
     pub globals: Vec<(String, GlobalAccess)>,
@@ -33,23 +33,6 @@ pub struct ParseError {
     pub message: String,
     pub labels: Vec<(u32, u32, Option<String>)>,
     pub help: Option<String>,
-}
-#[derive(Clone, Copy, Debug, Eq, PartialEq, rustler::NifUnitEnum)]
-pub enum Plugin {
-    React,
-    Unicorn,
-    Typescript,
-    Oxc,
-    Import,
-    Jsdoc,
-    Jest,
-    Vitest,
-    JsxA11y,
-    Nextjs,
-    ReactPerf,
-    Promise,
-    Node,
-    Vue,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq, rustler::NifUnitEnum)]
 pub enum RuleSeverity {

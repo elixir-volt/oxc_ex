@@ -14,7 +14,7 @@ if Code.ensure_loaded?(RustQ.Test) do
       assert source =~ "rustler::NifUnitEnum"
       assert source =~ "pub severity: FindingSeverity"
       assert source =~ "pub rules: Vec<(String, RuleSeverity)>"
-      assert source =~ "pub plugins: Vec<Plugin>"
+      assert source =~ "pub plugins: Vec<String>"
       assert RustQ.valid?(source, "oxc_lint_types.rs")
     end
   end

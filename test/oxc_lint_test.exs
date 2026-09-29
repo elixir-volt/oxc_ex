@@ -101,12 +101,21 @@ defmodule OXC.LintTest do
   end
 
   describe "run/3 with plugins" do
+    test "accepts oxlint plugin names and aliases" do
+      assert {:ok, _diags} = OXC.Lint.run("x", "test.jsx", plugins: ["react-hooks", "jsx-a11y"])
+    end
+
+    test "reports unknown plugin names" do
+      assert {:error, [%{message: ~s(Unknown lint plugin "reactt")}]} =
+               OXC.Lint.run("x", "test.js", plugins: ["reactt"])
+    end
+
     test "typescript plugin catches no-explicit-any" do
       source = "function foo(x: any) { return x; }"
 
       {:ok, diags} =
         OXC.Lint.run(source, "test.ts",
-          plugins: [:typescript],
+          plugins: ["typescript"],
           rules: %{"typescript/no-explicit-any" => :warn}
         )
 
@@ -123,7 +132,7 @@ defmodule OXC.LintTest do
 
       {:ok, diags} =
         OXC.Lint.run(source, "test.jsx",
-          plugins: [:react],
+          plugins: ["react"],
           rules: %{"react/no-direct-mutation-state" => :deny}
         )
 

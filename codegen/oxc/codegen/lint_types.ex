@@ -11,24 +11,8 @@ defmodule OXC.Codegen.LintTypes do
   @type rule_severity :: :allow | :warn | :deny
   @type finding_severity :: :error | :warning
   @type global_access :: :readonly | :writable | :off
-  @type plugin ::
-          :react
-          | :unicorn
-          | :typescript
-          | :oxc
-          | :import
-          | :jsdoc
-          | :jest
-          | :vitest
-          | :jsx_a11y
-          | :nextjs
-          | :react_perf
-          | :promise
-          | :node
-          | :vue
-
   @type lint_input :: %{
-          required(:plugins) => [plugin()],
+          required(:plugins) => [String.t()],
           required(:rules) => [{String.t(), rule_severity()}],
           required(:envs) => [String.t()],
           required(:globals) => [{String.t(), global_access()}],

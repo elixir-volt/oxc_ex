@@ -19,21 +19,8 @@ defmodule OXC.Lint do
   @type severity :: :allow | :warn | :deny
   @type diagnostic :: OXC.Diagnostic.t()
   @type global_access :: :readonly | :writable | :off
-  @type plugin ::
-          :react
-          | :unicorn
-          | :typescript
-          | :oxc
-          | :import
-          | :jsdoc
-          | :jest
-          | :vitest
-          | :jsx_a11y
-          | :nextjs
-          | :react_perf
-          | :promise
-          | :node
-          | :vue
+  @typedoc "An oxlint plugin name, such as `\"react\"` or `\"jsx-a11y\"`."
+  @type plugin :: String.t()
 
   @type option ::
           {:rules, %{String.t() => severity()}}
@@ -61,11 +48,9 @@ defmodule OXC.Lint do
       Rule names follow oxlint conventions: `"eqeqeq"`, `"react/no-danger"`,
       `"typescript/no-explicit-any"`, etc.
 
-    * `:plugins` — list of built-in plugin atoms to enable.
-      Default: oxlint defaults (eslint correctness rules).
-      Available: `:react`, `:typescript`, `:unicorn`, `:import`, `:jsdoc`,
-      `:jest`, `:vitest`, `:jsx_a11y`, `:nextjs`, `:react_perf`, `:promise`,
-      `:node`, `:vue`, `:oxc`
+    * `:plugins` — oxlint plugin names to enable, such as `["react", "jsx-a11y"]`,
+      accepting the same names and aliases as an oxlint config file.
+      Default: oxlint's default plugins. Unknown names are errors.
 
     * `:fix` — compute fix suggestions. Default: `false`
 
@@ -88,7 +73,7 @@ defmodule OXC.Lint do
 
       # With specific plugins and rules
       {:ok, diags} = OXC.Lint.run(source, "app.tsx",
-        plugins: [:react, :typescript],
+        plugins: ["react", "typescript"],
         rules: %{"no-console" => :warn, "react/no-danger" => :deny}
       )
 

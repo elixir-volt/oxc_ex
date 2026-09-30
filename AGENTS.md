@@ -49,6 +49,8 @@ pre-declared atoms. No serde.
    ```
 7. Commit and push checksums: `git commit -am "Update precompiled NIF checksums for vX.Y.Z" && git push`
 8. Publish: `mix hex.publish`
+9. Set the GitHub release notes from the version's `CHANGELOG.md` section:
+   `gh release edit vX.Y.Z --notes-file <section>`. Check that every release has notes.
 
 **Never force-push a release tag.** The precompile workflow triggers on tag
 push. Force-pushing re-triggers it, producing new artifacts that overwrite

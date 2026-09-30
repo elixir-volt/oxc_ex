@@ -25,7 +25,7 @@ Parse, transform, minify, lint, and generate JavaScript/TypeScript at native spe
 ```elixir
 def deps do
   [
-    {:oxc, "~> 0.18.0"}
+    {:oxc, "~> 0.18.1"}
   ]
 end
 ```

@@ -33,6 +33,24 @@ defmodule OXC.LintTest do
       assert "no-floating-promises" in rules
     end
 
+    test "type_aware_rules/1 resolves categories and keeps named rule options" do
+      assert {:ok, rules} =
+               OXC.Lint.type_aware_rules(
+                 plugins: ["typescript"],
+                 rules: %{
+                   "correctness" => :warn,
+                   "eqeqeq" => :deny,
+                   "typescript/no-floating-promises" => {:deny, %{"ignoreVoid" => true}}
+                 }
+               )
+
+      assert rules["typescript/no-floating-promises"] == {:deny, %{"ignoreVoid" => true}}
+      assert rules["typescript/await-thenable"] == :warn
+      refute Map.has_key?(rules, "eqeqeq")
+      refute Map.has_key?(rules, "correctness")
+      assert OXC.Lint.type_aware_rules(rules: rules) == {:ok, rules}
+    end
+
     test "does not select rules from disabled plugins" do
       {rules, _diagnostic} = selected_type_aware_rules(%{"correctness" => :deny}, ["unicorn"])
       assert rules == []

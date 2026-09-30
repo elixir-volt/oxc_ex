@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `OXC.Lint.type_aware_rules/1` resolves the type-aware rules that `OXC.Lint.run/2` submits to tsgolint, so callers can batch files by their effective rules.
+
 ### Fixed
 
 - Type-aware linting with `OXC.Lint.run/2` selects the type-aware rules of `all` and category filters, such as `"correctness" => :deny`, from the enabled plugins, instead of passing the category names to tsgolint as rules.

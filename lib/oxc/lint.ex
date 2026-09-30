@@ -92,8 +92,8 @@ defmodule OXC.Lint do
   @spec run(iodata(), String.t(), [option()]) :: {:ok, [diagnostic()]} | {:error, [diagnostic()]}
   def run(files, opts) when is_list(files) and is_list(opts) do
     if Keyword.get(opts, :type_aware, false) do
-      with {:ok, opts} <- select_type_aware_rules(opts) do
-        OXC.Lint.TypeAware.run(files, opts)
+      with {:ok, rules} <- type_aware_rules(opts) do
+        OXC.Lint.TypeAware.run(files, Keyword.put(opts, :rules, rules))
       end
     else
       {:error,
@@ -128,10 +128,19 @@ defmodule OXC.Lint do
     end
   end
 
-  # `all` and categories select tsgolint rules from the enabled plugins through
-  # oxlint's rule registry. Rules configured by name keep their options and
-  # override their categories.
-  defp select_type_aware_rules(opts) do
+  @doc """
+  Resolve the type-aware rules that `run/2` submits to tsgolint for these options.
+
+  `all` and category filters in `:rules` select type-aware rules from the enabled
+  `:plugins` through oxlint's rule registry. Rules named `typescript/*` keep their
+  options and override their categories. Other rules are syntax rules and are left out.
+
+      {:ok, %{"typescript/no-floating-promises" => :deny}} =
+        OXC.Lint.type_aware_rules(rules: %{"typescript/no-floating-promises" => :deny})
+  """
+  @spec type_aware_rules(keyword()) ::
+          {:ok, %{String.t() => severity() | {severity(), term()}}} | {:error, [diagnostic()]}
+  def type_aware_rules(opts) do
     rules = Keyword.get(opts, :rules, %{})
     severities = Enum.map(rules, fn {name, config} -> {name, rule_severity(config)} end)
 
@@ -140,7 +149,7 @@ defmodule OXC.Lint do
         named =
           Map.filter(rules, fn {name, _config} -> String.starts_with?(name, "typescript/") end)
 
-        {:ok, Keyword.put(opts, :rules, Map.merge(Map.new(selected), named))}
+        {:ok, Map.merge(Map.new(selected), named)}
 
       {:error, message} ->
         {:error, OXC.Diagnostic.from_raw([message], nil, nil)}

@@ -279,18 +279,3 @@ impl<'a> BundleOptions<'a> {
         opts
     }
 }
-
-/// Options of `isolated_declarations/3`.
-pub struct DeclarationsInput {
-    pub strip_internal: bool,
-    pub sourcemap: bool,
-}
-
-impl DeclarationsInput {
-    pub fn from_term(term: Term<'_>) -> Self {
-        Self {
-            strip_internal: get_bool(term, atoms::strip_internal()).unwrap_or(false),
-            sourcemap: get_bool(term, atoms::sourcemap()).unwrap_or(false),
-        }
-    }
-}

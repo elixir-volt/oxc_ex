@@ -8,8 +8,8 @@ use oxc_span::SourceType;
 use rustler::{Env, NifResult, Term};
 
 use crate::error::diagnostics;
-use crate::options::DeclarationsInput;
 use crate::parse::{binary_to_str, parser_options, source_from_term, TransformOutput};
+use crate::DeclarationsInput;
 
 /// Emit the `.d.ts` of a TypeScript source without a type checker, as
 /// `tsc --isolatedDeclarations` would: exported declarations need explicit
@@ -68,10 +68,9 @@ pub fn isolated_declarations_impl<'a>(
     env: Env<'a>,
     source_term: Term<'a>,
     filename: &str,
-    opts_term: Term<'a>,
+    input: DeclarationsInput,
 ) -> NifResult<Term<'a>> {
     let source_binary = source_from_term(source_term)?;
     let source = binary_to_str(&source_binary)?;
-    let opts = DeclarationsInput::from_term(opts_term);
-    Ok(declarations_source(source, filename, &opts).to_term(env))
+    Ok(declarations_source(source, filename, &input).to_term(env))
 }

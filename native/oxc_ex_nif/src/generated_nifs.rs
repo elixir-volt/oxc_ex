@@ -76,9 +76,9 @@ fn isolated_declarations<'a>(
     env: Env<'a>,
     source_term: Term<'a>,
     filename: &str,
-    opts_term: Term<'a>,
+    input: DeclarationsInput,
 ) -> NifResult<Term<'a>> {
-    isolated_declarations_impl(env, source_term, filename, opts_term)
+    isolated_declarations_impl(env, source_term, filename, input)
 }
 #[rustler::nif(schedule = "DirtyCpu")]
 fn codegen_native<'a>(

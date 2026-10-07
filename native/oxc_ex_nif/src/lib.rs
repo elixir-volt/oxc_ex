@@ -19,6 +19,7 @@ use parse::{minify_impl, parse_impl, transform_impl, valid_impl};
 use transform_many::transform_many_impl;
 
 include!("generated_atoms.rs");
+include!("generated_types.rs");
 include!("generated_nifs.rs");
 
 rustler::init!("Elixir.OXC.Native");

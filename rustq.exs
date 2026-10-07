@@ -6,6 +6,10 @@ unless Code.ensure_loaded?(OXC.Codegen.LintTypes) do
   Code.require_file("codegen/oxc/codegen/lint_types.ex")
 end
 
+unless Code.ensure_loaded?(OXC.Codegen.NativeTypes) do
+  Code.require_file("codegen/oxc/codegen/native_types.ex")
+end
+
 codegen_atom_sources = [
   "native/oxc_ex_nif/src/codegen.rs",
   "native/oxc_ex_nif/src/generated_term_helpers.rs",
@@ -65,7 +69,6 @@ rust "native/oxc_ex_nif/src/generated_atoms.rs" do
     :main_fields,
     :modules,
     :sourcemap,
-    :strip_internal,
     :drop_console,
     :jsx,
     :jsx_factory,
@@ -114,6 +117,10 @@ end
 
 rust "native/oxc_lint_nif/src/generated_types.rs" do
   RustQ.Native.items(OXC.Codegen.LintTypes)
+end
+
+rust "native/oxc_ex_nif/src/generated_types.rs" do
+  RustQ.Native.items(OXC.Codegen.NativeTypes)
 end
 
 rust "native/oxc_fmt_nif/src/generated_atoms.rs" do

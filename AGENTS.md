@@ -25,8 +25,12 @@ Elixir modules:
 - `lib/oxc/format.ex` — `OXC.Format.run/3`, `run!/3`
 - `lib/oxc/lint/rule.ex` — behaviour for custom Elixir lint rules
 
-NIF options are read directly from BEAM terms via `Term::map_get` with
-pre-declared atoms. No serde.
+NIF boundary types come from Elixir typespecs: `codegen/oxc/codegen/*_types.ex`
+modules (`use RustQ.Native, build: false, load: false`) generate
+`rustler::NifMap`/`NifUnitEnum` structs into each crate's `generated_types.rs`,
+and NIF functions take them as arguments (`LintInput`, `DeclarationsInput`).
+Older NIFs still read option maps by hand via `Term::map_get` with pre-declared
+atoms; new ones should declare a type instead. No serde.
 
 ## Naming Conventions
 

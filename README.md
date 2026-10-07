@@ -10,6 +10,7 @@ Parse, transform, minify, lint, and generate JavaScript/TypeScript at native spe
 - **Codegen** — serialize AST maps back to JavaScript source via OXC's code generator
 - **Bind** — substitute `$placeholders` in parsed AST (quasiquoting for JS)
 - **Transform** TypeScript → JavaScript, JSX → `createElement`/`jsx` calls
+- **Isolated declarations** — TypeScript → `.d.ts` without a type checker
 - **Minify** with dead code elimination, constant folding, and variable mangling
 - **Lint** with 650+ built-in oxlint rules + custom Elixir rules
 - **Bundle** multiple TS/JS modules into a single IIFE with dependency resolution
@@ -185,6 +186,22 @@ Custom JSX import source (Vue, Preact, etc.):
 ```elixir
 {:ok, js} = OXC.transform("<div />", "app.jsx", import_source: "vue")
 # Imports from vue/jsx-runtime instead of react/jsx-runtime
+```
+
+### Isolated Declarations
+
+Write a module's `.d.ts` from its source alone, as `tsc --isolatedDeclarations` would:
+
+```elixir
+{:ok, dts} = OXC.isolated_declarations("export const answer: number = 42", "answer.ts")
+# "export declare const answer: number;\n"
+
+# Exported declarations need explicit types; the emitter reports the ones it cannot infer
+{:error, [%{message: "TS9007: Function must have an explicit return type" <> _}]} =
+  OXC.isolated_declarations("export function f() { return compute() }", "f.ts")
+
+{:ok, dts} = OXC.isolated_declarations(source, "api.ts", strip_internal: true)
+{:ok, %{code: dts, sourcemap: map}} = OXC.isolated_declarations(source, "api.ts", sourcemap: true)
 ```
 
 ### Minify

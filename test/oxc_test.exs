@@ -360,6 +360,83 @@ defmodule OXCTest do
     end
   end
 
+  describe "isolated_declarations/3" do
+    test "emits the declarations of a module, keeping JSDoc" do
+      source = """
+      /** The recorder. */
+      export class Recorder {
+        private buffer: number[] = []
+        start(): void {}
+        stop(): number { return 1 }
+      }
+      export function size(items: string[]): number { return items.length }
+      import type { Options } from "./options"
+      export function configure(o: Options): void {}
+      export const NAME: string = "recorder"
+      const hidden = 1
+      """
+
+      assert {:ok, dts} = OXC.isolated_declarations(source, "recorder.ts")
+      assert dts =~ "/** The recorder. */\nexport declare class Recorder {"
+      assert dts =~ "private buffer;"
+      assert dts =~ "stop(): number;"
+      assert dts =~ "export declare function size(items: string[]): number;"
+      assert dts =~ ~s(import type { Options } from "./options";)
+      assert dts =~ "export declare const NAME: string;"
+      refute dts =~ "return"
+      refute dts =~ "hidden"
+    end
+
+    test "reports exported declarations whose types it cannot infer" do
+      assert {:error, [error]} =
+               OXC.isolated_declarations("export function f() { return compute() }", "f.ts")
+
+      assert error.message =~ "TS9007"
+      assert error.file == "f.ts"
+      assert error.position == {1, 17}
+    end
+
+    test "reports syntax errors" do
+      assert {:error, [error]} = OXC.isolated_declarations("export const = ;", "bad.ts")
+      assert error.message =~ "Unexpected token"
+    end
+
+    test "strips @internal declarations on request" do
+      source = """
+      /** @internal */
+      export const secret: string = "x"
+      export const shown: string = "y"
+      """
+
+      assert {:ok, kept} = OXC.isolated_declarations(source, "s.ts")
+      assert kept =~ "secret"
+
+      assert {:ok, stripped} = OXC.isolated_declarations(source, "s.ts", strip_internal: true)
+      refute stripped =~ "secret"
+      assert stripped =~ "export declare const shown: string;"
+    end
+
+    test "generates a declaration map on request" do
+      assert {:ok, %{code: code, sourcemap: map}} =
+               OXC.isolated_declarations("export const n: number = 1\n", "n.ts", sourcemap: true)
+
+      assert code =~ "export declare const n: number;"
+      assert %{"sources" => ["n.ts"]} = Jason.decode!(map)
+    end
+  end
+
+  describe "isolated_declarations!/3" do
+    test "returns declarations on success" do
+      assert OXC.isolated_declarations!("export const n: number = 1", "n.ts") =~ "declare const n"
+    end
+
+    test "raises OXC.Error on error" do
+      assert_raise OXC.Error, ~r/^f\.ts:1:17: TS9007/, fn ->
+        OXC.isolated_declarations!("export function f() { return compute() }", "f.ts")
+      end
+    end
+  end
+
   describe "minify/3" do
     test "minifies JavaScript" do
       {:ok, min} = OXC.minify("const x = 1 + 2;\nconsole.log(x);", "test.js")

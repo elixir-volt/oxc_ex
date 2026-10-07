@@ -14,19 +14,23 @@ Set `OXC_EX_BUILD=1` for any compilation that touches Rust code. GitHub CI uses 
 
 Three separate Rust NIF crates:
 
-- `native/oxc_ex_nif/` — parser, codegen, transform, minify, bundle (crates.io deps)
+- `native/oxc_ex_nif/` — parser, codegen, transform, isolated declarations, minify, bundle (crates.io deps)
 - `native/oxc_lint_nif/` — linter (git dep, `oxc_linter` not on crates.io)
 - `native/oxc_fmt_nif/` — formatter (git dep, `oxc_formatter` not on crates.io)
 
 Elixir modules:
 
-- `lib/oxc.ex` — main API: parse, transform, minify, bundle, codegen, bind, splice, walk, postwalk, patch_string
+- `lib/oxc.ex` — main API: parse, transform, isolated_declarations, minify, bundle, codegen, bind, splice, walk, postwalk, patch_string
 - `lib/oxc/lint.ex` — `OXC.Lint.run/3`, `run!/3`
 - `lib/oxc/format.ex` — `OXC.Format.run/3`, `run!/3`
 - `lib/oxc/lint/rule.ex` — behaviour for custom Elixir lint rules
 
-NIF options are read directly from BEAM terms via `Term::map_get` with
-pre-declared atoms. No serde.
+NIF boundary types come from Elixir typespecs: `codegen/oxc/codegen/*_types.ex`
+modules (`use RustQ.Native, build: false, load: false`) generate
+`rustler::NifMap`/`NifUnitEnum` structs into each crate's `generated_types.rs`,
+and NIF functions take them as arguments (`LintInput`, `DeclarationsInput`).
+Older NIFs still read option maps by hand via `Term::map_get` with pre-declared
+atoms; new ones should declare a type instead. No serde.
 
 ## Naming Conventions
 

@@ -17,18 +17,18 @@ fn transform<'a>(
     env: Env<'a>,
     source_term: Term<'a>,
     filename: &str,
-    opts_term: Term<'a>,
+    input: TransformInput,
 ) -> NifResult<Term<'a>> {
-    transform_impl(env, source_term, filename, opts_term)
+    transform_impl(env, source_term, filename, input)
 }
 #[rustler::nif(schedule = "DirtyCpu")]
 fn minify<'a>(
     env: Env<'a>,
     source_term: Term<'a>,
     filename: &str,
-    opts_term: Term<'a>,
+    input: MinifyInput,
 ) -> NifResult<Term<'a>> {
-    minify_impl(env, source_term, filename, opts_term)
+    minify_impl(env, source_term, filename, input)
 }
 #[rustler::nif(schedule = "DirtyCpu")]
 fn bundle<'a>(
@@ -63,9 +63,9 @@ fn select<'a>(
 fn transform_many<'a>(
     env: Env<'a>,
     inputs: Vec<(Term<'a>, String)>,
-    opts_term: Term<'a>,
+    opts: TransformInput,
 ) -> NifResult<Term<'a>> {
-    transform_many_impl(env, inputs, opts_term)
+    transform_many_impl(env, inputs, opts)
 }
 #[rustler::nif(schedule = "DirtyCpu")]
 fn codegen<'a>(env: Env<'a>, ast: Term<'a>) -> NifResult<Term<'a>> {

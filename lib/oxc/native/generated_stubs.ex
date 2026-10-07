@@ -10,11 +10,11 @@ defmodule OXC.Native.GeneratedStubs do
         :erlang.nif_error(:nif_not_loaded)
       end
 
-      def transform(_source_term, _filename, _opts_term) do
+      def transform(_source_term, _filename, _input) do
         :erlang.nif_error(:nif_not_loaded)
       end
 
-      def minify(_source_term, _filename, _opts_term) do
+      def minify(_source_term, _filename, _input) do
         :erlang.nif_error(:nif_not_loaded)
       end
 
@@ -34,7 +34,7 @@ defmodule OXC.Native.GeneratedStubs do
         :erlang.nif_error(:nif_not_loaded)
       end
 
-      def transform_many(_inputs, _opts_term) do
+      def transform_many(_inputs, _opts) do
         :erlang.nif_error(:nif_not_loaded)
       end
 

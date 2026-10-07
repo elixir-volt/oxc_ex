@@ -14,7 +14,7 @@ use std::path::Path;
 
 use crate::atoms;
 use crate::error::{diagnostics, error_to_term, Diagnostic};
-use crate::options::{MinifyInput, TransformInput};
+use crate::{MinifyInput, TransformInput};
 
 pub(crate) fn parser_options() -> ParseOptions {
     ParseOptions {
@@ -160,7 +160,7 @@ pub fn transform_source(source: &str, filename: &str, opts: &TransformInput) -> 
         .into_scoping();
 
     let options = build_transform_options(
-        &opts.jsx_runtime,
+        &opts.jsx,
         &opts.jsx_factory,
         &opts.jsx_fragment,
         &opts.import_source,
@@ -234,23 +234,21 @@ pub fn transform_impl<'a>(
     env: Env<'a>,
     source_term: Term<'a>,
     filename: &str,
-    opts_term: Term<'a>,
+    input: TransformInput,
 ) -> NifResult<Term<'a>> {
     let source_binary = source_from_term(source_term)?;
     let source = binary_to_str(&source_binary)?;
-    let opts = TransformInput::from_term(opts_term);
-    Ok(transform_source(source, filename, &opts).to_term(env))
+    Ok(transform_source(source, filename, &input).to_term(env))
 }
 
 pub fn minify_impl<'a>(
     env: Env<'a>,
     source_term: Term<'a>,
     filename: &str,
-    opts_term: Term<'a>,
+    input: MinifyInput,
 ) -> NifResult<Term<'a>> {
     let source_binary = source_from_term(source_term)?;
     let source = binary_to_str(&source_binary)?;
-    let opts = MinifyInput::from_term(opts_term);
     let allocator = Allocator::default();
     let source_type = SourceType::from_path(filename).unwrap_or_default();
 
@@ -264,7 +262,7 @@ pub fn minify_impl<'a>(
 
     let mut program = ret.program;
     let result = Minifier::new(MinifierOptions {
-        mangle: opts.mangle.then(MangleOptions::default),
+        mangle: input.mangle.then(MangleOptions::default),
         compress: Some(CompressOptions::default()),
     })
     .minify(&allocator, &mut program);

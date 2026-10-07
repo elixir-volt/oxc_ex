@@ -13,4 +13,15 @@ defmodule OXC.Codegen.NativeTypes do
           required(:strip_internal) => boolean(),
           required(:sourcemap) => boolean()
         }
+
+  @type transform_input :: %{
+          required(:jsx) => String.t(),
+          required(:jsx_factory) => String.t(),
+          required(:jsx_fragment) => String.t(),
+          required(:import_source) => String.t(),
+          required(:target) => String.t(),
+          required(:sourcemap) => boolean()
+        }
+
+  @type minify_input :: %{required(:mangle) => boolean()}
 end

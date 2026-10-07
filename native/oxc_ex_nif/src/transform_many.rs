@@ -1,15 +1,14 @@
 use rayon::prelude::*;
 use rustler::{Encoder, Env, NifResult, Term};
 
-use crate::options::TransformInput;
 use crate::parse::{binary_to_str, source_from_term, transform_source, TransformOutput};
+use crate::TransformInput;
 
 pub fn transform_many_impl<'a>(
     env: Env<'a>,
     inputs: Vec<(Term<'a>, String)>,
-    opts_term: Term<'a>,
+    opts: TransformInput,
 ) -> NifResult<Term<'a>> {
-    let opts = TransformInput::from_term(opts_term);
     let inputs = inputs
         .into_iter()
         .map(|(source_term, filename)| {

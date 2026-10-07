@@ -75,7 +75,6 @@ rust "native/oxc_ex_nif/src/generated_atoms.rs" do
     :jsx_fragment,
     :import_source,
     :target,
-    :mangle,
     :entries,
     :files,
     :outdir,

@@ -5,3 +5,16 @@ pub struct DeclarationsInput {
     pub strip_internal: bool,
     pub sourcemap: bool,
 }
+#[derive(Clone, Debug, rustler::NifMap)]
+pub struct MinifyInput {
+    pub mangle: bool,
+}
+#[derive(Clone, Debug, rustler::NifMap)]
+pub struct TransformInput {
+    pub jsx: String,
+    pub jsx_factory: String,
+    pub jsx_fragment: String,
+    pub import_source: String,
+    pub target: String,
+    pub sourcemap: bool,
+}

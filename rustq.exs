@@ -65,6 +65,7 @@ rust "native/oxc_ex_nif/src/generated_atoms.rs" do
     :main_fields,
     :modules,
     :sourcemap,
+    :strip_internal,
     :drop_console,
     :jsx,
     :jsx_factory,
@@ -230,6 +231,7 @@ native_nif_groups = [
   {"native/oxc_ex_nif/src/imports.rs", [select: []]},
   {"native/oxc_ex_nif/src/transform_many.rs", [transform_many: []]},
   {"native/oxc_ex_nif/src/codegen.rs", [codegen: []]},
+  {"native/oxc_ex_nif/src/declarations.rs", [isolated_declarations: []]},
   {"native/oxc_ex_nif/src/native_pipeline.rs", [codegen_native: []]}
 ]
 

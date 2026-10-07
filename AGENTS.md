@@ -14,13 +14,13 @@ Set `OXC_EX_BUILD=1` for any compilation that touches Rust code. GitHub CI uses 
 
 Three separate Rust NIF crates:
 
-- `native/oxc_ex_nif/` — parser, codegen, transform, minify, bundle (crates.io deps)
+- `native/oxc_ex_nif/` — parser, codegen, transform, isolated declarations, minify, bundle (crates.io deps)
 - `native/oxc_lint_nif/` — linter (git dep, `oxc_linter` not on crates.io)
 - `native/oxc_fmt_nif/` — formatter (git dep, `oxc_formatter` not on crates.io)
 
 Elixir modules:
 
-- `lib/oxc.ex` — main API: parse, transform, minify, bundle, codegen, bind, splice, walk, postwalk, patch_string
+- `lib/oxc.ex` — main API: parse, transform, isolated_declarations, minify, bundle, codegen, bind, splice, walk, postwalk, patch_string
 - `lib/oxc/lint.ex` — `OXC.Lint.run/3`, `run!/3`
 - `lib/oxc/format.ex` — `OXC.Format.run/3`, `run!/3`
 - `lib/oxc/lint/rule.ex` — behaviour for custom Elixir lint rules

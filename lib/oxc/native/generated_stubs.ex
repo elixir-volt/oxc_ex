@@ -42,6 +42,10 @@ defmodule OXC.Native.GeneratedStubs do
         :erlang.nif_error(:nif_not_loaded)
       end
 
+      def isolated_declarations(_source_term, _filename, _opts_term) do
+        :erlang.nif_error(:nif_not_loaded)
+      end
+
       def codegen_native(_source_term, _filename, _splices) do
         :erlang.nif_error(:nif_not_loaded)
       end

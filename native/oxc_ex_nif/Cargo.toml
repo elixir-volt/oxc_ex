@@ -16,6 +16,7 @@ oxc_ast = { version = "0.130", features = ["serialize"] }
 oxc_ast_visit = "0.130"
 oxc_codegen = { version = "0.130", features = ["sourcemap"] }
 oxc_diagnostics = "0.130"
+oxc_isolated_declarations = "0.130"
 oxc_minifier = "0.130"
 oxc_parser = "0.130"
 oxc_semantic = "0.130"

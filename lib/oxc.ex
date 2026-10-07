@@ -197,6 +197,50 @@ defmodule OXC do
   end
 
   @doc """
+  Emit the type declarations of a TypeScript source, as `tsc --isolatedDeclarations`
+  would write its `.d.ts`.
+
+  No type checker is involved: the declarations come from the source alone,
+  so exported declarations need explicit types. An exported function without
+  a return type, or a `const` whose type is inferred, is reported as an error
+  (the TS9007-family of diagnostics). JSDoc comments are kept.
+
+  ## Options
+
+    * `:strip_internal` — leave out declarations whose JSDoc has `@internal`
+      (default: `false`), as `stripInternal` does in `tsconfig.json`
+    * `:sourcemap` — generate a declaration map (default: `false`). When `true`,
+      returns `%{code: String.t(), sourcemap: String.t()}` instead of a plain string.
+
+  ## Examples
+
+      iex> {:ok, dts} = OXC.isolated_declarations("export const answer: number = 42", "answer.ts")
+      iex> dts
+      "export declare const answer: number;\\n"
+
+      iex> {:error, [error]} = OXC.isolated_declarations("export const answer = compute()", "answer.ts")
+      iex> error.message =~ "explicit type annotation"
+      true
+  """
+  @spec isolated_declarations(source(), String.t(), keyword()) :: transform_result()
+  def isolated_declarations(source, filename, opts \\ []) do
+    case OXC.Native.isolated_declarations(source, filename, normalize_declarations_options(opts)) do
+      {:ok, result} -> {:ok, normalize_native_result(result)}
+      {:error, errors} -> {:error, OXC.Diagnostic.from_raw(errors, filename, source)}
+    end
+  end
+
+  @doc "Like `isolated_declarations/3` but raises on errors."
+  @spec isolated_declarations!(source(), String.t(), keyword()) ::
+          String.t() | code_with_sourcemap()
+  def isolated_declarations!(source, filename, opts \\ []) do
+    case isolated_declarations(source, filename, opts) do
+      {:ok, dts} -> dts
+      {:error, errors} -> raise Error, errors: errors
+    end
+  end
+
+  @doc """
   Transform multiple source files in parallel using a Rust thread pool.
 
   Accepts a list of `{source, filename}` tuples and shared options.
@@ -540,6 +584,13 @@ defmodule OXC do
       jsx_fragment: Keyword.get(opts, :jsx_fragment, ""),
       import_source: Keyword.get(opts, :import_source, ""),
       target: Keyword.get(opts, :target, ""),
+      sourcemap: Keyword.get(opts, :sourcemap, false)
+    }
+  end
+
+  defp normalize_declarations_options(opts) do
+    %{
+      strip_internal: Keyword.get(opts, :strip_internal, false),
       sourcemap: Keyword.get(opts, :sourcemap, false)
     }
   end

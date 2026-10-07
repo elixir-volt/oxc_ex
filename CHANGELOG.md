@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- `OXC.isolated_declarations/3` and `isolated_declarations!/3` emit a TypeScript module's `.d.ts` from its source alone, as `tsc --isolatedDeclarations` would, through OXC's isolated declarations emitter. Exported declarations need explicit types, and the emitter reports those it cannot infer as TS9007-family errors. Options: `strip_internal` leaves out `@internal` declarations, `sourcemap` adds a declaration map ([#8](https://github.com/elixir-volt/oxc_ex/issues/8)).
+
 ## 0.18.1 - 2026-09-30
 
 ### Added
